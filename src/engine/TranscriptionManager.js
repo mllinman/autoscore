@@ -21,7 +21,7 @@ export class TranscriptionManager {
   /**
    * Run the full transcription pipeline using a Web Worker
    */
-  async transcribe(audioBuffer, sensitivity = 50, onProgress = null) {
+  async transcribe(audioBuffer, sensitivity = 50, advancedDSP = {}, onProgress = null) {
     this.onProgress = onProgress;
     const sampleRate = audioBuffer.sampleRate;
     const channelData = audioBuffer.getChannelData(0);
@@ -62,7 +62,8 @@ export class TranscriptionManager {
         payload: {
           channelData,
           sampleRate,
-          sensitivity
+          sensitivity,
+          advancedDSP
         }
       });
     });

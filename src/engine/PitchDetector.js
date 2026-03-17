@@ -5,10 +5,11 @@
  */
 
 export class PitchDetector {
-  constructor(sampleRate = 44100) {
+  constructor(sampleRate = 44100, threshold = 0.15, medianWindowSize = 5) {
     this.sampleRate = sampleRate;
-    this.threshold = 0.15;
+    this.threshold = threshold;
     this.probabilityThreshold = 0.7;
+    this.medianWindowSize = medianWindowSize;
   }
 
   /**
@@ -122,6 +123,42 @@ export class PitchDetector {
       }
     }
 
-    return pitches;
+    return this.applyMedianFilter(pitches, this.medianWindowSize);
+  }
+
+  /**
+   * Applies a median filter to pitch sequences to remove octave jumps and errors
+   */
+  applyMedianFilter(pitches, windowSize = 5) {
+    const smoothed = [];
+    const halfWindow = Math.floor(windowSize / 2);
+
+    for (let i = 0; i < pitches.length; i++) {
+      const current = pitches[i];
+      if (!current.hasPitch) {
+        smoothed.push(current);
+        continue;
+      }
+
+      // Collect valid frequencies in the surrounding window
+      const windowFreqs = [];
+      for (let j = Math.max(0, i - halfWindow); j <= Math.min(pitches.length - 1, i + halfWindow); j++) {
+        if (pitches[j].hasPitch) {
+          windowFreqs.push(pitches[j].frequency);
+        }
+      }
+
+      if (windowFreqs.length > 2) {
+        windowFreqs.sort((a, b) => a - b);
+        const medianFreq = windowFreqs[Math.floor(windowFreqs.length / 2)];
+        smoothed.push({
+          ...current,
+          frequency: medianFreq
+        });
+      } else {
+        smoothed.push(current);
+      }
+    }
+    return smoothed;
   }
 }

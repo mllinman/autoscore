@@ -17,6 +17,21 @@ export default function AudioUploader() {
   const { state, dispatch, getAudioContext } = useApp();
   const fileInputRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
+  
+  // Phase 13: Instrument Select & Auto-Tab
+  const [selectedInstrument, setSelectedInstrument] = useState('auto');
+  const [createTab, setCreateTab] = useState(false);
+
+  // Auto-enable Create Tab if a stringed instrument is chosen
+  const handleInstrumentChange = (e) => {
+    const val = e.target.value;
+    setSelectedInstrument(val);
+    if (val === 'guitar_acoustic' || val === 'guitar_electric' || val === 'bass') {
+      setCreateTab(true);
+    } else {
+      setCreateTab(false);
+    }
+  };
 
   const processFile = useCallback(async (file, settings = null) => {
     const effectiveSettings = settings || state.fileSettings;
@@ -53,6 +68,14 @@ export default function AudioUploader() {
           duration: audioBuffer.duration,
         },
       });
+
+      // Phase 13: Auto-Routing
+      if (createTab && ['guitar_acoustic', 'guitar_electric', 'bass'].includes(selectedInstrument)) {
+        dispatch({ type: 'SET_VIEW_MODE', payload: 'tab' });
+      } else {
+        // Explicitly set it back to sheet just in case
+        dispatch({ type: 'SET_VIEW_MODE', payload: 'sheet' });
+      }
 
       // Auto-transcribe if processing mode is findNotes
       if (effectiveSettings.processingMode === 'findNotes') {
@@ -152,6 +175,34 @@ export default function AudioUploader() {
                 <span key={fmt} className="format-badge">{fmt}</span>
               ))}
             </div>
+
+            {/* Phase 13: Instrument Select & Auto Tab Options */}
+            <div style={{ marginTop: 'var(--space-xl)', display: 'flex', gap: 'var(--space-md)', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
+              <select 
+                className="select" 
+                value={selectedInstrument} 
+                onChange={handleInstrumentChange}
+                style={{ width: '200px' }}
+              >
+                <option value="auto">Auto-Detect Instrument</option>
+                <option value="piano">Piano / Keys</option>
+                <option value="guitar_acoustic">Acoustic Guitar</option>
+                <option value="guitar_electric">Electric Guitar</option>
+                <option value="bass">Bass Guitar</option>
+                <option value="vocals">Vocals</option>
+                <option value="drums">Drums / Percussion</option>
+              </select>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                <input 
+                  type="checkbox" 
+                  checked={createTab} 
+                  onChange={(e) => setCreateTab(e.target.checked)}
+                />
+                Create Tablature
+              </label>
+            </div>
+
             <input
               ref={fileInputRef}
               type="file"

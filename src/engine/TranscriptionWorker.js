@@ -7,7 +7,15 @@ self.onmessage = async function(e) {
   const { type, payload } = e.data;
 
   if (type === 'START_TRANSCRIPTION') {
-    const { channelData, sampleRate, sensitivity } = payload;
+    const { channelData, sampleRate, sensitivity, advancedDSP } = payload;
+    
+    // Fallbacks in case advancedDSP wasn't provided
+    const config = {
+      yinThreshold: 0.15,
+      onsetSensitivity: 0.3,
+      medianFilterWindow: 5,
+      ...advancedDSP
+    };
     
     const duration = channelData.length / sampleRate;
     const mockAudioBuffer = {
@@ -16,7 +24,7 @@ self.onmessage = async function(e) {
       getChannelData: () => channelData,
     };
 
-    const pitchDetector = new PitchDetector(sampleRate);
+    const pitchDetector = new PitchDetector(sampleRate, config.yinThreshold, config.medianFilterWindow);
     const onsetDetector = new OnsetDetector(sampleRate);
     const beatDetector = new BeatDetector(sampleRate);
     const noteQuantizer = new NoteQuantizer();
@@ -39,7 +47,7 @@ self.onmessage = async function(e) {
       reportProgress(60, 'Pitch detection complete');
       
       reportProgress(62, 'Detecting note onsets...');
-      const onsets = onsetDetector.detectOnsets(mockAudioBuffer, 0.3);
+      const onsets = onsetDetector.detectOnsets(mockAudioBuffer, config.onsetSensitivity);
       reportProgress(75, 'Onset detection complete');
 
       reportProgress(77, 'Analyzing tempo and beats...');

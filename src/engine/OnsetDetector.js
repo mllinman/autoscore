@@ -19,17 +19,32 @@ export class OnsetDetector {
     const numFrames = Math.floor((data.length - this.fftSize) / this.hopSize);
     const energyValues = [];
 
-    // Step 1: Compute RMS energy per frame (O(N) total)
+    // Step 1: Compute RMS energy + High Frequency Content (HFC) per frame (O(N) total)
     for (let frame = 0; frame < numFrames; frame++) {
       const start = frame * this.hopSize;
       let energy = 0;
+      let hfc = 0;
+      
       for (let i = start; i < start + this.fftSize; i++) {
-        energy += data[i] * data[i];
+        const val = data[i];
+        energy += val * val;
+        
+        // Simple high-pass (first order difference) to catch transients
+        if (i > start) {
+          const diff = data[i] - data[i - 1];
+          hfc += diff * diff;
+        }
       }
+      
       energy = Math.sqrt(energy / this.fftSize);
+      hfc = Math.sqrt(hfc / this.fftSize);
+      
+      // Combine broad energy with HFC for solid transient detection
+      const combinedEnergy = energy + hfc * 1.5;
+
       energyValues.push({
         time: start / this.sampleRate,
-        energy,
+        energy: combinedEnergy,
         frameIndex: frame,
       });
     }

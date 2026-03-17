@@ -11,11 +11,13 @@ import TablatureViewer from './components/TablatureViewer';
 import PianoRollEditor from './components/PianoRollEditor';
 import SpectrogramViewer from './components/SpectrogramViewer';
 import LyricsViewer from './components/LyricsViewer';
+import StemMixer from './components/StemMixer';
 import NoteEditor from './components/NoteEditor';
 import MeasureEditingMode from './components/MeasureEditingMode';
 import ExportDialog from './components/ExportDialog';
 import OpenFileDialog from './components/OpenFileDialog';
-import { Music, Guitar, Piano, BarChart3, Type, LayoutList } from 'lucide-react';
+import SettingsDialog from './components/SettingsDialog';
+import { Music, Guitar, Piano, BarChart3, Type, LayoutList, Activity } from 'lucide-react';
 
 const viewTabs = [
   { id: 'sheet', label: 'Sheet Music', icon: Music },
@@ -23,10 +25,23 @@ const viewTabs = [
   { id: 'piano', label: 'Piano Roll', icon: Piano },
   { id: 'spectrogram', label: 'Spectrogram', icon: BarChart3 },
   { id: 'lyrics', label: 'Lyrics', icon: Type },
+  { id: 'stems', label: 'Stems', icon: Activity },
 ];
 
 export default function App() {
   const { state, dispatch } = useApp();
+
+  // Sync Accent Color to CSS variables
+  React.useEffect(() => {
+    const root = document.documentElement;
+    const accent = state.preferences.accentColor || '#7c5cfc';
+    root.style.setProperty('--accent-primary', accent);
+    
+    // Compute subtle hover/glow variants based on the hex
+    // (A proper implementation would parse HSL, but this works for proof of concept)
+    root.style.setProperty('--accent-glow', `${accent}40`); // 25% opacity
+    root.style.setProperty('--border-hover', `${accent}66`); // 40% opacity
+  }, [state.preferences.accentColor]);
 
   const renderMainContent = () => {
     switch (state.viewMode) {
@@ -35,6 +50,7 @@ export default function App() {
       case 'piano': return <PianoRollEditor />;
       case 'spectrogram': return <SpectrogramViewer />;
       case 'lyrics': return <LyricsViewer />;
+      case 'stems': return <StemMixer />;
       default: return <SheetMusicViewer />;
     }
   };
@@ -74,9 +90,14 @@ export default function App() {
         const { setTranscriptionManager } = await import('./components/NoteEditor');
         setTranscriptionManager(mgr);
 
-        const result = await mgr.transcribe(audioBuffer, state.sensitivity, ({ progress, step }) => {
-          dispatch({ type: 'UPDATE_TRANSCRIPTION_PROGRESS', payload: { progress, step } });
-        });
+        const result = await mgr.transcribe(
+          audioBuffer, 
+          state.sensitivity, 
+          state.preferences.advancedDSP,
+          ({ progress, step }) => {
+            dispatch({ type: 'UPDATE_TRANSCRIPTION_PROGRESS', payload: { progress, step } });
+          }
+        );
 
         dispatch({
           type: 'SET_TRANSCRIPTION_RESULT',
@@ -193,6 +214,7 @@ export default function App() {
       {/* Modals */}
       <ExportDialog />
       <OpenFileDialog onFileReady={handleFileReady} />
+      <SettingsDialog />
     </div>
   );
 }

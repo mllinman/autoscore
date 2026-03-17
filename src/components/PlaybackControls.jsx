@@ -72,15 +72,45 @@ export default function PlaybackControls() {
       osc.frequency.value = note.frequency || 440 * Math.pow(2, (note.midi - 69) / 12);
 
       const noteGain = audioCtx.createGain();
-      noteGain.gain.setValueAtTime(0, audioCtx.currentTime + noteStart / playbackRate);
-      noteGain.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + noteStart / playbackRate + 0.02);
-      noteGain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + noteEnd / playbackRate);
+      
+      // ADSR Parameters
+      const attackTime = 0.015;
+      const decayTime = 0.1;
+      const sustainLevel = 0.15;
+      const releaseTime = 0.15;
+      const peakVolume = 0.4;
+
+      const startTimeScaled = audioCtx.currentTime + noteStart / playbackRate;
+      const endTimeScaled = audioCtx.currentTime + noteEnd / playbackRate;
+      const durationScaled = endTimeScaled - startTimeScaled;
+
+      noteGain.gain.setValueAtTime(0, startTimeScaled);
+      
+      if (durationScaled > attackTime) {
+        noteGain.gain.linearRampToValueAtTime(peakVolume, startTimeScaled + attackTime);
+        
+        if (durationScaled > attackTime + decayTime) {
+          // Full ADSR
+          noteGain.gain.exponentialRampToValueAtTime(Math.max(0.01, sustainLevel), startTimeScaled + attackTime + decayTime);
+          noteGain.gain.setValueAtTime(sustainLevel, endTimeScaled);
+        } else {
+          // Note ends during decay phase
+          const partialDecay = peakVolume - (peakVolume - sustainLevel) * ((durationScaled - attackTime) / decayTime);
+          noteGain.gain.linearRampToValueAtTime(partialDecay, endTimeScaled);
+        }
+      } else {
+        // Very short note, ends during attack phase
+        noteGain.gain.linearRampToValueAtTime(peakVolume * (durationScaled / attackTime), endTimeScaled);
+      }
+
+      // Release Phase
+      noteGain.gain.linearRampToValueAtTime(0, endTimeScaled + releaseTime);
 
       osc.connect(noteGain);
       noteGain.connect(noteGainRef.current);
 
-      osc.start(audioCtx.currentTime + noteStart / playbackRate);
-      osc.stop(audioCtx.currentTime + noteEnd / playbackRate);
+      osc.start(startTimeScaled);
+      osc.stop(endTimeScaled + releaseTime);
       noteOscillatorsRef.current.push(osc);
     }
   }, [state.notes, state.noteGroups, playbackMode, noteVolume, playbackRate, stopAllNoteOscillators, getPlayRange]);

@@ -20,6 +20,19 @@ const initialState = {
     timeStep: 512,
   },
 
+  // Global Preferences
+  preferences: {
+    theme: 'dark',
+    accentColor: '#7c5cfc',
+    notationStyle: 'standard', // 'standard' | 'jazz'
+    autoSave: true,
+    advancedDSP: {
+      yinThreshold: 0.15,
+      onsetSensitivity: 0.3,
+      medianFilterWindow: 5,
+    }
+  },
+
   // Playback
   isPlaying: false,
   currentTime: 0,
@@ -45,6 +58,17 @@ const initialState = {
   spectrogramData: null,
   showNoteLines: true,
   showHarmonicLines: false,
+
+  // Stem Separation
+  stems: null, // { vocals, bass, drums, other }
+
+  // Vocal Tuning
+  vocalTuning: {
+    retuneSpeed: 50,
+    amount: 100,
+    scale: 'chromatic',
+    key: 'C'
+  },
 
   // Editing
   selectedNotes: [],
@@ -116,6 +140,20 @@ function appReducer(state, action) {
     case 'SET_FILE_SETTINGS':
       return { ...state, fileSettings: { ...state.fileSettings, ...action.payload } };
 
+    case 'UPDATE_PREFERENCES':
+      // Deep merge for preferences
+      return { 
+        ...state, 
+        preferences: { 
+          ...state.preferences, 
+          ...action.payload,
+          advancedDSP: {
+            ...state.preferences.advancedDSP,
+            ...(action.payload.advancedDSP || {})
+          }
+        } 
+      };
+
     case 'SET_PLAYING':
       return { ...state, isPlaying: action.payload };
 
@@ -182,6 +220,12 @@ function appReducer(state, action) {
 
     case 'SET_SHOW_HARMONIC_LINES':
       return { ...state, showHarmonicLines: action.payload };
+
+    case 'SET_STEMS':
+      return { ...state, stems: action.payload };
+
+    case 'UPDATE_VOCAL_TUNING':
+      return { ...state, vocalTuning: { ...state.vocalTuning, ...action.payload } };
 
     case 'SET_NOTES':
       return { ...state, notes: action.payload };
