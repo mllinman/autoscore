@@ -1,10 +1,10 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { TranscriptionManager } from '../engine/TranscriptionManager';
 import { SpectrogramEngine } from '../engine/SpectrogramEngine';
 import { setTranscriptionManager } from './NoteEditor';
 import { midiToNoteName } from '../utils/musicTheory';
-import { Upload, Sparkles, Music, Guitar, Zap, FileAudio } from 'lucide-react';
+import { Upload, Sparkles, Music, Guitar, Zap, FileAudio, Piano, Edit3, Play, Mic, Download, Type, Users, Settings, Plus, Check } from 'lucide-react';
 
 const SUPPORTED_AUDIO = ['audio/wav', 'audio/mpeg', 'audio/mp3', 'audio/flac', 'audio/ogg',
   'audio/x-wav', 'audio/x-flac', 'audio/vorbis', 'audio/webm'];
@@ -16,7 +16,7 @@ export let transcriptionManager = null;
 export default function AudioUploader() {
   const { state, dispatch, getAudioContext } = useApp();
   const fileInputRef = useRef(null);
-  const [isDragging, setIsDragging] = React.useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const processFile = useCallback(async (file, settings = null) => {
     const effectiveSettings = settings || state.fileSettings;
@@ -121,63 +121,206 @@ export default function AudioUploader() {
   if (state.audioBuffer) return null;
 
   return (
-    <div className="uploader-page">
-      <div className="uploader-content">
-        <div className="uploader-branding">
-          <div className="brand-sparkle">
-            <Sparkles size={28} />
+    <div className="landing-page-container">
+      {/* Hero Section */}
+      <section className="landing-hero">
+        <div className="landing-hero-content">
+          <div className="brand-logo-large">
+            <Sparkles size={32} />
           </div>
           <h1>Transform Audio into Music</h1>
-          <p>Drop an audio file to automatically detect notes, beats, and instruments.
-             AutoScore uses advanced algorithms to create sheet music, tablature, and MIDI.</p>
-        </div>
+          <p className="hero-subtitle">
+            Automatically create sheet music from an audio file - MP3, WAV, OGG, FLAC and M4A. AutoScore uses advanced algorithms to create standard notation, tablature, and MIDI.
+          </p>
 
-        <div
-          className={`drop-zone ${isDragging ? 'dragging' : ''}`}
-          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <div className="drop-zone-icon">
-            <Upload size={24} />
+          <div
+            className={`landing-drop-zone ${isDragging ? 'dragging' : ''}`}
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <div className="drop-zone-icon-large">
+              <Upload size={32} />
+            </div>
+            <div className="drop-zone-text-large">
+              <strong>Drop audio file here or click to browse</strong>
+              <span>Upload a supported file to start transcribing</span>
+            </div>
+            <div className="format-badges">
+              {['.WAV', '.MP3', '.FLAC', '.OGG', '.MIDI', '.XML'].map(fmt => (
+                <span key={fmt} className="format-badge">{fmt}</span>
+              ))}
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".wav,.mp3,.flac,.ogg,.mid,.midi,.xml,.musicxml"
+              style={{ display: 'none' }}
+              onChange={handleFileSelect}
+            />
           </div>
-          <div className="drop-zone-text">
-            <strong>Drop audio file here or click to browse</strong>
-            <span>Upload a .wav or .mp3 file to get started</span>
-          </div>
-          <div className="format-badges">
-            {['.WAV', '.MP3', '.FLAC', '.OGG'].map(fmt => (
-              <span key={fmt} className="format-badge">{fmt}</span>
-            ))}
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".wav,.mp3,.flac,.ogg,.mid,.midi,.xml,.musicxml"
-            style={{ display: 'none' }}
-            onChange={handleFileSelect}
-          />
         </div>
+      </section>
 
-        <div className="feature-cards">
-          <div className="feature-card">
-            <div className="feature-icon"><Music size={20} /></div>
-            <strong>Sheet Music</strong>
-            <span>Standard notation</span>
-          </div>
-          <div className="feature-card">
-            <div className="feature-icon"><Guitar size={20} /></div>
-            <strong>Guitar Tabs</strong>
-            <span>Tablature format</span>
-          </div>
-          <div className="feature-card">
-            <div className="feature-icon"><Zap size={20} /></div>
-            <strong>AI Detection</strong>
-            <span>Auto note finding</span>
+      {/* Primary Features Grid */}
+      <section className="landing-section bg-secondary">
+        <div className="section-content">
+          <h2>Convert Your Audio File to Notation</h2>
+          <p className="section-subtitle">Streamlined and user-friendly program to create musical notation or guitar tabs allows composers to write, save and print their music compositions on their computer.</p>
+          
+          <div className="features-grid-6">
+            <div className="feature-card-v2">
+              <div className="icon-wrapper primary"><Music size={24} /></div>
+              <h3>Create Sheet Music</h3>
+              <p>Piano, choral, guitar tabs & more</p>
+            </div>
+            <div className="feature-card-v2">
+              <div className="icon-wrapper secondary"><Play size={24} /></div>
+              <h3>MIDI & VSTi Playback</h3>
+              <p>Piano, guitar & other instruments</p>
+            </div>
+            <div className="feature-card-v2">
+              <div className="icon-wrapper tertiary"><Edit3 size={24} /></div>
+              <h3>Edit Notes</h3>
+              <p>Assign sharps, flats, slurs & more</p>
+            </div>
+            <div className="feature-card-v2">
+              <div className="icon-wrapper primary"><FileAudio size={24} /></div>
+              <h3>Convert Audio to Notes</h3>
+              <p>Select a file and import as notation</p>
+            </div>
+            <div className="feature-card-v2">
+              <div className="icon-wrapper secondary"><Type size={24} /></div>
+              <h3>Add Lyrics</h3>
+              <p>Easily add lyrics and verses</p>
+            </div>
+            <div className="feature-card-v2">
+              <div className="icon-wrapper tertiary"><Download size={24} /></div>
+              <h3>Export Music Score</h3>
+              <p>Export as audio, image or PDF</p>
+            </div>
           </div>
         </div>
-      </div>
+      </section>
+
+      {/* Detailed Capabilities */}
+      <section className="landing-section">
+        <div className="section-content">
+          <div className="split-layout">
+            <div className="split-text">
+              <h2>Intuitive Music Writing Software</h2>
+              <p>Create, compose, and share your music with professional notation tools. Point and click to add notes and musical notation to the staff.</p>
+              
+              <ul className="feature-list">
+                <li><Check size={16} /> Change the key signature and time signature</li>
+                <li><Check size={16} /> Add whole, half, quarter, eighth, sixteenth and thirty-second notes and rests</li>
+                <li><Check size={16} /> Create sheet music in Treble, Bass, Tenor or Alto Clefs</li>
+                <li><Check size={16} /> Display note name in notes to help beginner musicians</li>
+                <li><Check size={16} /> Write your own guitar tablature and percussion notation</li>
+                <li><Check size={16} /> Assign sharp, flat and natural accidentals to notes</li>
+                <li><Check size={16} /> Open and edit MusicXML files</li>
+                <li><Check size={16} /> Change note colors - great for music teachers and lessons</li>
+              </ul>
+            </div>
+            <div className="split-image-placeholder">
+              <div className="glass-panel">
+                <Music size={64} className="watermark-icon" />
+                <div className="mock-ui">
+                  <div className="mock-toolbar"></div>
+                  <div className="mock-staff"></div>
+                  <div className="mock-staff"></div>
+                  <div className="mock-staff"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Advanced Composition Tools */}
+      <section className="landing-section bg-secondary">
+        <div className="section-content">
+          <div className="split-layout reverse">
+            <div className="split-text">
+              <h2>Explore Advanced Composition Tools</h2>
+              <p>The streamlined, easy-to-use interface makes it easy for students to learn the art of composing and music notation.</p>
+              
+              <ul className="feature-list">
+                <li><Check size={16} /> Conveniently switch between notes and rests using keyboard shortcuts</li>
+                <li><Check size={16} /> Insert text to specify a title, tempo, dynamics or lyrics</li>
+                <li><Check size={16} /> Drag notes to change their pitch or placement</li>
+                <li><Check size={16} /> Copy, cut and paste measures to easily insert themes</li>
+                <li><Check size={16} /> Transcriber tool creates a visual representation of notes to aid transcribing</li>
+                <li><Check size={16} /> Add pedal lines, octave lines, glissandi and tempo markings</li>
+                <li><Check size={16} /> Auto formatting tools automatically clean up note placement</li>
+              </ul>
+            </div>
+            <div className="split-image-placeholder">
+               <div className="glass-panel dark">
+                <Settings size={64} className="watermark-icon" />
+                <div className="mock-ui config">
+                  <div className="mock-slider"></div>
+                  <div className="mock-slider"></div>
+                  <div className="mock-button"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Target Audience / Styles */}
+      <section className="landing-section">
+        <div className="section-content center">
+          <h2>Write Any Music Score</h2>
+          <p className="section-subtitle">Compose music for a single instrument, a band or an orchestra.</p>
+          
+          <div className="styles-grid">
+            <div className="style-card">
+              <Music size={32} />
+              <h4>Sheet Music</h4>
+              <p>Standard notation for any instrument</p>
+            </div>
+            <div className="style-card">
+              <Guitar size={32} />
+              <h4>Guitar Tabs</h4>
+              <p>Quickly create guitar tablature</p>
+            </div>
+            <div className="style-card">
+              <Zap size={32} />
+              <h4>Percussion</h4>
+              <p>Write your own percussion notation</p>
+            </div>
+            <div className="style-card">
+              <Type size={32} />
+              <h4>Add Lyrics</h4>
+              <p>Smoothly add lyrics to your score</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Audience Footer */}
+      <section className="landing-section bg-tertiary call-to-action">
+        <div className="section-content center">
+          <h2>Compose, Arrange and Print Music for Any Instrument, Any Style</h2>
+          <p>Whether you're learning music theory or composing a masterpiece, AutoScore supports every stage of your musical journey.</p>
+          
+          <div className="audience-tags">
+            <span>Singer</span>
+            <span>Drummer</span>
+            <span>Guitarist</span>
+            <span>Music Teacher</span>
+            <span>Music Student</span>
+            <span>Songwriter</span>
+            <span>Concertmaster</span>
+            <span>Pianist</span>
+            <span>Lyricist</span>
+            <span>Composer</span>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
