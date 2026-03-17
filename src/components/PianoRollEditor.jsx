@@ -1,47 +1,66 @@
-import React, { useRef, useEffect, useMemo, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { midiToNoteName } from '../utils/musicTheory';
-import { Piano } from 'lucide-react';
+import { Piano, Tv, GripHorizontal } from 'lucide-react';
 
 /**
  * PianoRollEditor - MIDI-style piano roll note editor
  * Interactive grid with draggable notes and snap-to-grid
+ * Also features an Interactive Practice mode (falling notes)
  */
 export default function PianoRollEditor() {
   const { state, dispatch } = useApp();
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
+  
+  const [isPracticeMode, setIsPracticeMode] = useState(false);
+  const [splitHands, setSplitHands] = useState(false);
+  const splitMidi = 60; // Middle C
 
   const { notes, duration, currentTime, beats, tempo, selectedNotes, activeTool } = state;
 
-  // Piano roll settings
-  const noteHeight = 12;
-  const pianoKeyWidth = 52;
-  const pixelsPerSecond = 120;
-  const midiRange = { low: 36, high: 96 }; // C2 to C7
+  // Horizontal Piano Roll Settings
+  const rhNoteHeight = 12;
+  const rhPianoKeyWidth = 52;
+  const rhPixelsPerSecond = 120;
+  
+  // Vertical (Practice) Piano Roll Settings
+  const vpKeyWidth = 24;
+  const vpKeyboardHeight = 80;
+  const vpPixelsPerSecond = 200; // How fast notes fall
+  const vpVisibleSeconds = 4; // Lookahead time
+
+  const midiRange = { low: 21, high: 108 }; // A0 to C8 (full 88 keys)
   const totalKeys = midiRange.high - midiRange.low;
-  const canvasHeight = totalKeys * noteHeight;
-  const canvasWidth = Math.max(800, duration * pixelsPerSecond + pianoKeyWidth + 50);
+  
+  // Natural vs Accidental key mapping for standardizing the 88-key layout visually in vertical mode
+  const getWhiteKeyIndex = (midi) => {
+    let whiteIndex = 0;
+    for (let i = midiRange.low; i < midi; i++) {
+      if (![1, 3, 6, 8, 10].includes(i % 12)) whiteIndex++;
+    }
+    return whiteIndex;
+  };
+  const totalWhiteKeys = getWhiteKeyIndex(midiRange.high);
+  
+  // Canvas Setup
+  const rhCanvasHeight = totalKeys * rhNoteHeight;
+  const rhCanvasWidth = Math.max(800, duration * rhPixelsPerSecond + rhPianoKeyWidth + 50);
+  
+  const vpCanvasWidth = totalWhiteKeys * vpKeyWidth;
+  const vpCanvasHeight = 600;
 
-  const drawPianoRoll = useCallback(() => {
-    if (!canvasRef.current) return;
+  const canvasWidth = isPracticeMode ? vpCanvasWidth : rhCanvasWidth;
+  const canvasHeight = isPracticeMode ? vpCanvasHeight : rhCanvasHeight;
 
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    const dpr = window.devicePixelRatio || 1;
-
-    canvas.width = canvasWidth * dpr;
-    canvas.height = canvasHeight * dpr;
-    canvas.style.width = `${canvasWidth}px`;
-    canvas.style.height = `${canvasHeight}px`;
-    ctx.scale(dpr, dpr);
-
-    // Clear
-    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-
+  const drawHorizontalRoll = (ctx, dpr) => {
+    // Fill background
+    ctx.fillStyle = 'var(--bg-primary)';
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+    
     // Draw piano keys
     for (let midi = midiRange.low; midi < midiRange.high; midi++) {
-      const y = (midiRange.high - midi - 1) * noteHeight;
+      const y = (midiRange.high - midi - 1) * rhNoteHeight;
       const noteInOctave = midi % 12;
       const isBlack = [1, 3, 6, 8, 10].includes(noteInOctave);
 
@@ -49,13 +68,13 @@ export default function PianoRollEditor() {
       ctx.fillStyle = isBlack
         ? 'rgba(20, 20, 35, 0.9)'
         : 'rgba(28, 28, 48, 0.6)';
-      ctx.fillRect(0, y, pianoKeyWidth, noteHeight);
+      ctx.fillRect(0, y, rhPianoKeyWidth, rhNoteHeight);
 
       // Key label
       if (noteInOctave === 0) { // C notes
         ctx.font = '9px JetBrains Mono, monospace';
         ctx.fillStyle = 'rgba(167, 139, 250, 0.6)';
-        ctx.fillText(midiToNoteName(midi), 4, y + noteHeight - 2);
+        ctx.fillText(midiToNoteName(midi), 4, y + rhNoteHeight - 2);
       }
 
       // Grid line
@@ -63,7 +82,7 @@ export default function PianoRollEditor() {
         ? 'rgba(255, 255, 255, 0.03)'
         : 'rgba(255, 255, 255, 0.05)';
       ctx.beginPath();
-      ctx.moveTo(pianoKeyWidth, y);
+      ctx.moveTo(rhPianoKeyWidth, y);
       ctx.lineTo(canvasWidth, y);
       ctx.stroke();
 
@@ -71,21 +90,21 @@ export default function PianoRollEditor() {
       ctx.fillStyle = isBlack
         ? 'rgba(15, 15, 28, 0.5)'
         : 'rgba(20, 20, 38, 0.3)';
-      ctx.fillRect(pianoKeyWidth, y, canvasWidth - pianoKeyWidth, noteHeight);
+      ctx.fillRect(rhPianoKeyWidth, y, canvasWidth - rhPianoKeyWidth, rhNoteHeight);
     }
 
     // Piano key border
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(pianoKeyWidth, 0);
-    ctx.lineTo(pianoKeyWidth, canvasHeight);
+    ctx.moveTo(rhPianoKeyWidth, 0);
+    ctx.lineTo(rhPianoKeyWidth, canvasHeight);
     ctx.stroke();
 
     // Draw beat grid lines
     if (beats && beats.length > 0) {
       for (const beat of beats) {
-        const x = pianoKeyWidth + beat.time * pixelsPerSecond;
+        const x = rhPianoKeyWidth + beat.time * rhPixelsPerSecond;
         ctx.strokeStyle = beat.isDownbeat
           ? 'rgba(255, 255, 255, 0.12)'
           : 'rgba(255, 255, 255, 0.04)';
@@ -95,7 +114,6 @@ export default function PianoRollEditor() {
         ctx.lineTo(x, canvasHeight);
         ctx.stroke();
 
-        // Measure number at top
         if (beat.isDownbeat) {
           ctx.font = '9px Inter, sans-serif';
           ctx.fillStyle = 'rgba(167, 139, 250, 0.4)';
@@ -103,10 +121,9 @@ export default function PianoRollEditor() {
         }
       }
     } else if (duration > 0 && tempo > 0) {
-      // Draw basic beat lines
       const beatDuration = 60 / tempo;
       for (let t = 0; t < duration; t += beatDuration) {
-        const x = pianoKeyWidth + t * pixelsPerSecond;
+        const x = rhPianoKeyWidth + t * rhPixelsPerSecond;
         const isDownbeat = Math.round(t / beatDuration) % 4 === 0;
         ctx.strokeStyle = isDownbeat
           ? 'rgba(255, 255, 255, 0.12)'
@@ -122,14 +139,13 @@ export default function PianoRollEditor() {
     for (const note of notes) {
       if (note.midi < midiRange.low || note.midi >= midiRange.high) continue;
 
-      const x = pianoKeyWidth + note.startTime * pixelsPerSecond;
-      const y = (midiRange.high - note.midi - 1) * noteHeight;
-      const w = Math.max(4, note.duration * pixelsPerSecond);
+      const x = rhPianoKeyWidth + note.startTime * rhPixelsPerSecond;
+      const y = (midiRange.high - note.midi - 1) * rhNoteHeight;
+      const w = Math.max(4, note.duration * rhPixelsPerSecond);
 
       const isSelected = selectedNotes.some(n => n.id === note.id);
       const isPlaying = note.startTime <= currentTime && note.endTime > currentTime;
 
-      // Note rectangle
       if (isPlaying) {
         ctx.fillStyle = 'rgba(52, 211, 153, 0.9)';
         ctx.shadowColor = '#34d399';
@@ -140,20 +156,19 @@ export default function PianoRollEditor() {
         ctx.shadowBlur = 4;
       } else {
         const alpha = 0.5 + note.confidence * 0.4;
-        ctx.fillStyle = `rgba(124, 92, 252, ${alpha})`;
+        ctx.fillStyle = splitHands ? (note.midi >= splitMidi ? `rgba(96, 165, 250, ${alpha})` : `rgba(244, 114, 182, ${alpha})`) : `rgba(124, 92, 252, ${alpha})`;
         ctx.shadowBlur = 0;
       }
 
-      // Rounded rect
       const r = 3;
       ctx.beginPath();
       ctx.moveTo(x + r, y + 1);
       ctx.lineTo(x + w - r, y + 1);
       ctx.quadraticCurveTo(x + w, y + 1, x + w, y + 1 + r);
-      ctx.lineTo(x + w, y + noteHeight - 1 - r);
-      ctx.quadraticCurveTo(x + w, y + noteHeight - 1, x + w - r, y + noteHeight - 1);
-      ctx.lineTo(x + r, y + noteHeight - 1);
-      ctx.quadraticCurveTo(x, y + noteHeight - 1, x, y + noteHeight - 1 - r);
+      ctx.lineTo(x + w, y + rhNoteHeight - 1 - r);
+      ctx.quadraticCurveTo(x + w, y + rhNoteHeight - 1, x + w - r, y + rhNoteHeight - 1);
+      ctx.lineTo(x + r, y + rhNoteHeight - 1);
+      ctx.quadraticCurveTo(x, y + rhNoteHeight - 1, x, y + rhNoteHeight - 1 - r);
       ctx.lineTo(x, y + 1 + r);
       ctx.quadraticCurveTo(x, y + 1, x + r, y + 1);
       ctx.closePath();
@@ -161,7 +176,6 @@ export default function PianoRollEditor() {
 
       ctx.shadowBlur = 0;
 
-      // Note border
       ctx.strokeStyle = isPlaying
         ? 'rgba(52, 211, 153, 0.5)'
         : isSelected
@@ -173,7 +187,7 @@ export default function PianoRollEditor() {
 
     // Draw playhead
     if (duration > 0) {
-      const playheadX = pianoKeyWidth + currentTime * pixelsPerSecond;
+      const playheadX = rhPianoKeyWidth + currentTime * rhPixelsPerSecond;
       ctx.strokeStyle = '#fff';
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -181,7 +195,6 @@ export default function PianoRollEditor() {
       ctx.lineTo(playheadX, canvasHeight);
       ctx.stroke();
 
-      // Playhead triangle at top
       ctx.fillStyle = '#fff';
       ctx.beginPath();
       ctx.moveTo(playheadX - 5, 0);
@@ -190,26 +203,217 @@ export default function PianoRollEditor() {
       ctx.closePath();
       ctx.fill();
     }
-  }, [notes, beats, duration, currentTime, tempo, selectedNotes,
-      canvasWidth, canvasHeight, pixelsPerSecond, noteHeight, pianoKeyWidth, midiRange]);
+  };
 
-  useEffect(() => {
-    drawPianoRoll();
-  }, [drawPianoRoll]);
+  const drawVerticalRoll = (ctx, dpr) => {
+    // Fill background
+    ctx.fillStyle = '#101018'; // Darker for practice mode
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-  const handleClick = useCallback((e) => {
+    const hitY = canvasHeight - vpKeyboardHeight;
+    
+    // Draw string lanes / tracks
+    for (let i = 0; i <= totalWhiteKeys; i++) {
+        const x = i * vpKeyWidth;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, hitY);
+        ctx.stroke();
+    }
+
+    // Draw falling notes
+    for (const note of notes) {
+      if (note.midi < midiRange.low || note.midi >= midiRange.high) continue;
+
+      // Note is visible if it ends after (currentTime - small margin) and starts before (currentTime + lookahead)
+      if (note.endTime < currentTime - 0.5 || note.startTime > currentTime + vpVisibleSeconds) continue;
+
+      const isBlack = [1, 3, 6, 8, 10].includes(note.midi % 12);
+      const whiteIndex = getWhiteKeyIndex(note.midi);
+      
+      const x = isBlack 
+        ? (whiteIndex * vpKeyWidth) - (vpKeyWidth * 0.3)
+        : whiteIndex * vpKeyWidth;
+      
+      const w = isBlack ? vpKeyWidth * 0.6 : vpKeyWidth;
+      
+      // Calculate Y positioning. Top of screen is currentTime + vpVisibleSeconds
+      // Hit line is at currentTime.
+      // Time flows from top to bottom.
+      const timeDiffStart = note.startTime - currentTime;
+      const timeDiffEnd = note.endTime - currentTime;
+      
+      // y is coordinate from top of canvas
+      const yBottom = hitY - (timeDiffStart * vpPixelsPerSecond);
+      const yTop = hitY - (timeDiffEnd * vpPixelsPerSecond);
+      const h = yBottom - yTop;
+
+      const isPlaying = note.startTime <= currentTime && note.endTime > currentTime;
+      
+      // Setup colors
+      let baseColor, glowColor;
+      if (splitHands) {
+        if (note.midi >= splitMidi) {
+          baseColor = isPlaying ? '#93c5fd' : '#3b82f6'; // Light blue / Blue
+          glowColor = '#60a5fa';
+        } else {
+          baseColor = isPlaying ? '#f9a8d4' : '#ec4899'; // Light pink / Pink
+          glowColor = '#f472b6';
+        }
+      } else {
+        baseColor = isPlaying ? '#a78bfa' : '#7c5cfc'; // Purple
+        glowColor = '#8b5cf6';
+      }
+
+      ctx.fillStyle = baseColor;
+      if (isPlaying) {
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = 15;
+      } else {
+        ctx.shadowBlur = 0;
+      }
+
+      // Rounded rect
+      const r = Math.min(4, w / 2, h / 2);
+      ctx.beginPath();
+      // Clip if drawing above canvas to avoid artifacts
+      const drawY = Math.max(0, yTop);
+      const drawH = Math.min(yBottom, canvasHeight) - drawY;
+      
+      if (drawH > 0) {
+        // Just draw a simple rounded rect for performance
+        if (isBlack) {
+            ctx.fillStyle = isPlaying ? glowColor : '#4c2eaf';
+        }
+        ctx.fillRect(x + 1, drawY, w - 2, drawH);
+        
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 1, drawY, w - 2, drawH);
+      }
+      ctx.shadowBlur = 0;
+    }
+
+    // Draw keyboard at bottom
+    ctx.fillStyle = '#1e1e2d';
+    ctx.fillRect(0, canvasHeight - vpKeyboardHeight, canvasWidth, vpKeyboardHeight);
+    
+    // Draw white keys
+    for (let midi = midiRange.low; midi < midiRange.high; midi++) {
+      if ([1, 3, 6, 8, 10].includes(midi % 12)) continue; // skip black keys
+      
+      const whiteIndex = getWhiteKeyIndex(midi);
+      const x = whiteIndex * vpKeyWidth;
+      
+      const isActive = notes.some(n => n.midi === midi && n.startTime <= currentTime && n.endTime > currentTime);
+      
+      ctx.fillStyle = isActive ? (splitHands ? (midi >= splitMidi ? '#93c5fd' : '#f9a8d4') : '#a78bfa') : '#ffffff';
+      ctx.fillRect(x, canvasHeight - vpKeyboardHeight, vpKeyWidth - 1, vpKeyboardHeight);
+      
+      if (midi % 12 === 0) {
+         ctx.fillStyle = '#666';
+         ctx.font = '10px Inter';
+         ctx.fillText(midiToNoteName(midi), x + 4, canvasHeight - 10);
+      }
+    }
+
+    // Draw black keys
+    for (let midi = midiRange.low; midi < midiRange.high; midi++) {
+      if (![1, 3, 6, 8, 10].includes(midi % 12)) continue;
+      
+      const whiteIndex = getWhiteKeyIndex(midi);
+      // Black key sits between white keys
+      const x = (whiteIndex * vpKeyWidth) - (vpKeyWidth * 0.35);
+      const w = vpKeyWidth * 0.7;
+      const h = vpKeyboardHeight * 0.6;
+      
+      const isActive = notes.some(n => n.midi === midi && n.startTime <= currentTime && n.endTime > currentTime);
+      
+      ctx.fillStyle = isActive ? (splitHands ? (midi >= splitMidi ? '#3b82f6' : '#ec4899') : '#a78bfa') : '#111';
+      ctx.fillRect(x, canvasHeight - vpKeyboardHeight, w, h);
+      
+      // Black key highlight
+      ctx.fillStyle = 'rgba(255,255,255,0.1)';
+      ctx.fillRect(x + w * 0.2, canvasHeight - vpKeyboardHeight, w * 0.6, h * 0.9);
+    }
+    
+    // Hit line overlay
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, hitY);
+    ctx.lineTo(canvasWidth, hitY);
+    ctx.stroke();
+  };
+
+  const drawPianoRoll = useCallback(() => {
     if (!canvasRef.current) return;
 
-    const rect = canvasRef.current.getBoundingClientRect();
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
+
+    canvas.width = canvasWidth * dpr;
+    canvas.height = canvasHeight * dpr;
+    canvas.style.width = `${canvasWidth}px`;
+    canvas.style.height = `${canvasHeight}px`;
+    ctx.scale(dpr, dpr);
+
+    if (isPracticeMode) {
+      drawVerticalRoll(ctx, dpr);
+    } else {
+      drawHorizontalRoll(ctx, dpr);
+    }
+
+  }, [notes, beats, duration, currentTime, tempo, selectedNotes, isPracticeMode, splitHands, canvasWidth, canvasHeight]);
+
+  // Request animation frame loop if audio is playing to ensure smooth vertical scroll
+  useEffect(() => {
+    let animationId;
+    if (state.isPlaying && isPracticeMode) {
+        const loop = () => {
+             drawPianoRoll();
+             animationId = requestAnimationFrame(loop);
+        };
+        animationId = requestAnimationFrame(loop);
+    } else {
+        drawPianoRoll();
+    }
+    return () => cancelAnimationFrame(animationId);
+  }, [state.isPlaying, isPracticeMode, drawPianoRoll]);
+
+  // Auto-scroll the container to keep playhead/active region in view
+  useEffect(() => {
+    if (!containerRef.current || isPracticeMode) return; // Vertical handles its own scroll via camera paradigm
+    
+    const container = containerRef.current;
+    const playheadX = rhPianoKeyWidth + currentTime * rhPixelsPerSecond;
+    
+    // Trigger scroll if playhead is past 70% of the view or before 10%
+    const scrollLeft = container.scrollLeft;
+    const width = container.clientWidth;
+    
+    if (playheadX > scrollLeft + width * 0.7) {
+      container.scrollTo({ left: playheadX - width * 0.3, behavior: state.isPlaying ? 'auto' : 'smooth' });
+    } else if (playheadX < scrollLeft + width * 0.1) {
+      container.scrollTo({ left: Math.max(0, playheadX - width * 0.1), behavior: state.isPlaying ? 'auto' : 'smooth' });
+    }
+  }, [currentTime, isPracticeMode, state.isPlaying, rhPianoKeyWidth, rhPixelsPerSecond]);
+
+
+  const handleClick = useCallback((e) => {
+    if (!canvasRef.current || isPracticeMode) return; // Disable editing in practice mode
+
+    const rect = canvasRef.current.getBoundingClientRect();
     const x = (e.clientX - rect.left);
     const y = (e.clientY - rect.top);
 
-    const time = (x - pianoKeyWidth) / pixelsPerSecond;
-    const midi = midiRange.high - 1 - Math.floor(y / noteHeight);
+    const time = (x - rhPianoKeyWidth) / rhPixelsPerSecond;
+    const midi = midiRange.high - 1 - Math.floor(y / rhNoteHeight);
 
     if (activeTool === 'select') {
-      // Find clicked note
       const clickedNote = notes.find(n =>
         n.startTime <= time && n.endTime >= time && n.midi === midi
       );
@@ -233,7 +437,6 @@ export default function PianoRollEditor() {
         dispatch({ type: 'SET_SELECTED_NOTES', payload: [] });
       }
     } else if (activeTool === 'pencil' && time >= 0) {
-      // Add a new note
       const beatDuration = 60 / tempo;
       dispatch({
         type: 'ADD_NOTE',
@@ -261,7 +464,7 @@ export default function PianoRollEditor() {
         });
       }
     }
-  }, [notes, selectedNotes, activeTool, tempo, dispatch, pixelsPerSecond, noteHeight, pianoKeyWidth, midiRange]);
+  }, [notes, selectedNotes, activeTool, tempo, isPracticeMode, dispatch, rhPixelsPerSecond, rhNoteHeight, rhPianoKeyWidth, midiRange]);
 
   if (notes.length === 0 && !state.audioBuffer) {
     return (
@@ -273,12 +476,53 @@ export default function PianoRollEditor() {
   }
 
   return (
-    <div className="piano-roll" ref={containerRef}>
-      <canvas
-        ref={canvasRef}
-        onClick={handleClick}
-        style={{ cursor: activeTool === 'pencil' ? 'crosshair' : activeTool === 'eraser' ? 'not-allowed' : 'default' }}
-      />
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Piano Roll Toolbar */}
+      <div className="editor-toolbar" style={{ borderBottom: '1px solid var(--border-subtle)', padding: 'var(--space-sm) var(--space-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-secondary)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+           <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Piano size={16} /> 
+              {isPracticeMode ? 'Practice Piano Roll (Falling Notes)' : 'Standard Piano Roll'}
+           </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
+           {isPracticeMode && (
+             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                <input 
+                  type="checkbox" 
+                  checked={splitHands} 
+                  onChange={(e) => setSplitHands(e.target.checked)} 
+                  style={{ accentColor: 'var(--accent-primary)' }}
+                />
+                Split L/R Hands (Middle C)
+             </label>
+           )}
+           <div className="btn-group">
+            <button 
+              className={`btn btn-sm btn-icon ${!isPracticeMode ? 'active' : ''}`}
+              title="Standard Editor Mode"
+              onClick={() => setIsPracticeMode(false)}
+            >
+              <GripHorizontal size={14} />
+            </button>
+            <button 
+              className={`btn btn-sm btn-icon ${isPracticeMode ? 'active' : ''}`}
+              title="Interactive Practice Mode"
+              onClick={() => setIsPracticeMode(true)}
+            >
+              <Tv size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="piano-roll" ref={containerRef} style={{ flex: 1, overflow: 'auto' }}>
+        <canvas
+          ref={canvasRef}
+          onClick={handleClick}
+          style={{ cursor: isPracticeMode ? 'default' : activeTool === 'pencil' ? 'crosshair' : activeTool === 'eraser' ? 'not-allowed' : 'default' }}
+        />
+      </div>
     </div>
   );
 }

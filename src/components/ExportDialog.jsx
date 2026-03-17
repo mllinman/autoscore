@@ -11,6 +11,7 @@ const allFormats = [
   { id: 'pdf', name: 'PDF', description: 'Sheet music document', extension: '.pdf', icon: FileText },
   { id: 'musicxml', name: 'MusicXML', description: 'Notation interchange', extension: '.musicxml', icon: FileCode },
   { id: 'midi', name: 'MIDI', description: 'Standard MIDI file', extension: '.mid', icon: Music },
+  { id: 'guitarpro', name: 'GuitarPro', description: 'Tablature file', extension: '.gp', icon: FileCode },
   { id: 'csv_notes', name: 'Note Timing', description: 'CSV note & beat data', extension: '.csv', icon: Table },
   { id: 'csv_spectrogram', name: 'Spectrogram', description: 'Amplitude data', extension: '.txt', icon: BarChart3 },
 ];
@@ -53,6 +54,14 @@ export default function ExportDialog() {
         case 'midi':
           MIDIExporter.exportMIDI(
             state.notes, state.tempo, state.timeSignature, state.instrument, fileName
+          );
+          break;
+        case 'guitarpro':
+          // GuitarPro uses a complex binary format (.gp/.gpx). We export a MusicXML file
+          // that standard GuitarPro can import directly.
+          MusicXMLExporter.exportMusicXML(
+            state.notes, state.measures, state.instrument,
+            state.tempo, state.timeSignature, state.keySignature, fileName + '_for_GuitarPro'
           );
           break;
         case 'csv_notes': {

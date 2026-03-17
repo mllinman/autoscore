@@ -270,6 +270,99 @@ export default function AudioUploader() {
         </div>
       </section>
 
+      {/* Practice Modes - New Section */}
+      <section className="landing-section">
+        <div className="section-content">
+          <div className="center" style={{ textAlign: 'center', marginBottom: '40px' }}>
+            <h2>Multiple Ways to Practice</h2>
+            <p className="section-subtitle">We convert audio into sheet music, piano roll, and guitar tabs. These can be exported in PDF, MIDI, MusicXML, or GuitarPro format.</p>
+          </div>
+
+          <div className="practice-features">
+            {/* Sheet Music Practice */}
+            <div className="split-layout">
+              <div className="split-text">
+                <h3><Music size={24} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '8px', color: 'var(--accent-primary)' }}/> Sheet Music</h3>
+                <p>Our AI technology picks out the notes from your audio and intelligently notates them on a musical staff, automatically detecting a wide range of musical features including time and key signature, trills, staccato, and other expressive markings.</p>
+                <p>Sheet music is especially valuable for classically trained musicians, music students, music teachers, and composers.</p>
+                <ul className="feature-list" style={{ marginTop: '24px' }}>
+                  <li><Play size={16} /> Playback the score to hear the transcription</li>
+                  <li><Settings size={16} /> Speed it up or slow it down to your liking</li>
+                  <li><Edit3 size={16} /> Edit the transcription directly</li>
+                </ul>
+              </div>
+              <div className="split-image-placeholder">
+                <div className="glass-panel" style={{ height: '300px' }}>
+                  <Music size={64} className="watermark-icon" />
+                  <div className="mock-ui"><div className="mock-staff"></div><div className="mock-staff"></div></div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ margin: '60px 0', borderTop: '1px solid var(--border-subtle)' }}></div>
+
+            {/* Piano Roll Practice */}
+            <div className="split-layout reverse">
+              <div className="split-text">
+                <h3><Piano size={24} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '8px', color: 'var(--accent-secondary)' }}/> Interactive Piano Roll</h3>
+                <p>One of our output types is a MIDI file. Our interactive piano roll beautifully displays the notes as they fall onto the piano keyboard. Perfect for learning and practicing.</p>
+                <p>This is best for musicians who may not have a lot of experience reading other notation formats, such as sheet music.</p>
+                <ul className="feature-list" style={{ marginTop: '24px' }}>
+                  <li><Check size={16} /> Split the notes into left and right hands</li>
+                  <li><Settings size={16} /> Control the speed, transposition, colors, and more</li>
+                  <li><Download size={16} /> Export as a MIDI file for use in your DAW</li>
+                </ul>
+              </div>
+              <div className="split-image-placeholder">
+                <div className="glass-panel dark" style={{ height: '300px' }}>
+                  <Piano size={64} className="watermark-icon" />
+                  <div className="mock-ui config">
+                    <div style={{ display: 'flex', gap: '4px', height: '100%', alignItems: 'flex-end', paddingBottom: '20px' }}>
+                      {[1,2,3,4,5].map(i => <div key={i} style={{ width: '20px', height: `${Math.random() * 80 + 20}%`, background: 'var(--accent-secondary)', borderRadius: '2px' }}></div>)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ margin: '60px 0', borderTop: '1px solid var(--border-subtle)' }}></div>
+
+            {/* Guitar Tabs Practice */}
+            <div className="split-layout">
+              <div className="split-text">
+                <h3><Guitar size={24} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '8px', color: 'var(--accent-tertiary)' }}/> Guitar Tabs</h3>
+                <p>We're able to detect the notes from your acoustic guitar audio and notate them as guitar tabs, showing you exactly which finger to use for each note. Perfect for guitarists who want to know exactly how to play a song.</p>
+                <ul className="feature-list" style={{ marginTop: '24px' }}>
+                   <li><Play size={16} /> Playback the tabs to hear the transcription</li>
+                   <li><Zap size={16} /> See exactly which finger to use for each note</li>
+                   <li><Sparkles size={16} /> Interactive 3D system for practicing tabs (Rocksmith style)</li>
+                   <li><Download size={16} /> Export as a PDF or GuitarPro file</li>
+                </ul>
+              </div>
+              <div className="split-image-placeholder">
+                <div className="glass-panel" style={{ height: '300px' }}>
+                  <Guitar size={64} className="watermark-icon" />
+                  <div className="mock-ui">
+                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', height: '100%', justifyContent: 'center' }}>
+                      {[1,2,3,4,5,6].map(i => <div key={i} style={{ width: '100%', height: '2px', background: 'var(--border-strong)' }}></div>)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ margin: '60px 0', borderTop: '1px solid var(--border-subtle)' }}></div>
+
+            {/* Single Instrument Transcriptions */}
+            <div className="center" style={{ textAlign: 'center' }}>
+               <h3>Single Instrument Transcription</h3>
+               <p style={{ color: 'var(--text-secondary)', maxWidth: '600px', margin: '16px auto 0' }}>We currently support piano, guitar, bass, violin, flute, trumpet, saxophone, drums, and vocals, with more instruments coming soon!</p>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
       {/* Target Audience / Styles */}
       <section className="landing-section">
         <div className="section-content center">
