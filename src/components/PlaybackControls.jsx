@@ -1,198 +1,329 @@
-import React, { useRef, useCallback, useEffect } from 'react';
+import React, { useRef, useCallback, useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatTime } from '../utils/musicTheory';
 import {
-  Play, Pause, Square, SkipBack, SkipForward,
-  Repeat, Volume2, VolumeX, Gauge
+  Play, Pause, Square, Repeat, SkipBack, SkipForward,
+  Volume2, VolumeX, Gauge, Music, Headphones, Music2
 } from 'lucide-react';
 
+/**
+ * PlaybackControls - Enhanced playback with music/notes/both modes,
+ * playback regions, and note synthesis
+ */
 export default function PlaybackControls() {
   const { state, dispatch, getAudioContext, sourceNodeRef } = useApp();
-  const gainNodeRef = useRef(null);
-  const startTimeRef = useRef(0);
+  const [showSpeedPopup, setShowSpeedPopup] = useState(false);
   const animFrameRef = useRef(null);
+  const startTimeRef = useRef(0);
+  const startOffsetRef = useRef(0);
+  const noteOscillatorsRef = useRef([]);
+  const gainNodeRef = useRef(null);
+  const noteGainRef = useRef(null);
 
-  const stopPlayback = useCallback(() => {
-    if (sourceNodeRef.current) {
-      try { sourceNodeRef.current.stop(); } catch (e) {}
-      sourceNodeRef.current = null;
+  const { audioBuffer, isPlaying, currentTime, duration, playbackRate,
+          volume, noteVolume, isLooping, playbackMode, playbackRegion } = state;
+
+  // Determine playback range
+  const getPlayRange = useCallback(() => {
+    if (playbackRegion === 'selection' && state.selectionRange) {
+      return { start: state.selectionRange.start, end: state.selectionRange.end };
     }
-    if (animFrameRef.current) {
-      cancelAnimationFrame(animFrameRef.current);
-      animFrameRef.current = null;
+    if (playbackRegion === 'hereToEnd') {
+      return { start: currentTime, end: duration };
     }
-    dispatch({ type: 'SET_PLAYING', payload: false });
-  }, [dispatch, sourceNodeRef]);
+    return { start: 0, end: duration };
+  }, [playbackRegion, state.selectionRange, currentTime, duration]);
 
-  const startPlayback = useCallback(() => {
-    if (!state.audioBuffer) return;
+  const stopAllNoteOscillators = useCallback(() => {
+    for (const osc of noteOscillatorsRef.current) {
+      try { osc.stop(); osc.disconnect(); } catch (_) {}
+    }
+    noteOscillatorsRef.current = [];
+  }, []);
 
-    const ctx = getAudioContext();
-    if (ctx.state === 'suspended') ctx.resume();
+  const scheduleNotePlayback = useCallback((audioCtx, startTime, offset) => {
+    if (playbackMode === 'music') return; // don't play notes in music-only mode
 
-    // Stop any existing playback
-    if (sourceNodeRef.current) {
-      try { sourceNodeRef.current.stop(); } catch (e) {}
+    stopAllNoteOscillators();
+
+    if (!noteGainRef.current) {
+      noteGainRef.current = audioCtx.createGain();
+      noteGainRef.current.connect(audioCtx.destination);
+    }
+    noteGainRef.current.gain.value = noteVolume;
+
+    const range = getPlayRange();
+
+    for (const note of state.notes) {
+      if (note.endTime < range.start || note.startTime > range.end) continue;
+
+      // Check if note group is muted
+      const groupId = note.group || 0;
+      const group = state.noteGroups.find(g => g.id === groupId);
+      if (group && group.muted) continue;
+
+      const noteStart = Math.max(0, note.startTime - offset);
+      const noteEnd = Math.max(0, note.endTime - offset);
+      const noteDuration = noteEnd - noteStart;
+      if (noteDuration <= 0) continue;
+
+      const osc = audioCtx.createOscillator();
+      osc.type = 'triangle'; // Softer than sine, more musical
+      osc.frequency.value = note.frequency || 440 * Math.pow(2, (note.midi - 69) / 12);
+
+      const noteGain = audioCtx.createGain();
+      noteGain.gain.setValueAtTime(0, audioCtx.currentTime + noteStart / playbackRate);
+      noteGain.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + noteStart / playbackRate + 0.02);
+      noteGain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + noteEnd / playbackRate);
+
+      osc.connect(noteGain);
+      noteGain.connect(noteGainRef.current);
+
+      osc.start(audioCtx.currentTime + noteStart / playbackRate);
+      osc.stop(audioCtx.currentTime + noteEnd / playbackRate);
+      noteOscillatorsRef.current.push(osc);
+    }
+  }, [state.notes, state.noteGroups, playbackMode, noteVolume, playbackRate, stopAllNoteOscillators, getPlayRange]);
+
+  const play = useCallback(() => {
+    if (!audioBuffer && state.notes.length === 0) return;
+
+    const audioCtx = getAudioContext();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const range = getPlayRange();
+    const offset = currentTime >= range.end ? range.start : Math.max(range.start, currentTime);
+    startOffsetRef.current = offset;
+    startTimeRef.current = audioCtx.currentTime;
+
+    // Audio playback
+    if (audioBuffer && playbackMode !== 'notes') {
+      if (sourceNodeRef.current) {
+        try { sourceNodeRef.current.stop(); } catch (_) {}
+      }
+
+      const source = audioCtx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.playbackRate.value = playbackRate;
+      source.loop = isLooping;
+
+      if (!gainNodeRef.current) {
+        gainNodeRef.current = audioCtx.createGain();
+        gainNodeRef.current.connect(audioCtx.destination);
+      }
+      gainNodeRef.current.gain.value = volume;
+
+      source.connect(gainNodeRef.current);
+      source.start(0, offset);
+      sourceNodeRef.current = source;
+
+      source.onended = () => {
+        if (isLooping) return;
+        dispatch({ type: 'SET_PLAYING', payload: false });
+      };
     }
 
-    const source = ctx.createBufferSource();
-    source.buffer = state.audioBuffer;
-    source.playbackRate.value = state.playbackRate;
-    source.loop = state.isLooping;
-
-    const gainNode = ctx.createGain();
-    gainNode.gain.value = state.volume;
-    gainNodeRef.current = gainNode;
-
-    source.connect(gainNode);
-    gainNode.connect(ctx.destination);
-
-    const offset = state.currentTime || 0;
-    source.start(0, offset);
-    sourceNodeRef.current = source;
-    startTimeRef.current = ctx.currentTime - offset / state.playbackRate;
+    // Note playback
+    scheduleNotePlayback(audioCtx, audioCtx.currentTime, offset);
 
     dispatch({ type: 'SET_PLAYING', payload: true });
 
-    // Update time position
-    const updateTime = () => {
-      if (!sourceNodeRef.current) return;
-      const elapsed = (ctx.currentTime - startTimeRef.current) * state.playbackRate;
-      const clamped = Math.min(elapsed, state.duration);
+    // Animation loop for time tracking
+    const animate = () => {
+      const elapsed = (audioCtx.currentTime - startTimeRef.current) * playbackRate;
+      const newTime = startOffsetRef.current + elapsed;
+      const range = getPlayRange();
 
-      dispatch({ type: 'SET_CURRENT_TIME', payload: clamped });
-
-      if (clamped >= state.duration && !state.isLooping) {
-        stopPlayback();
-        dispatch({ type: 'SET_CURRENT_TIME', payload: 0 });
-        return;
+      if (newTime >= range.end) {
+        if (isLooping) {
+          startOffsetRef.current = range.start;
+          startTimeRef.current = audioCtx.currentTime;
+        } else {
+          dispatch({ type: 'SET_CURRENT_TIME', payload: range.end });
+          dispatch({ type: 'SET_PLAYING', payload: false });
+          return;
+        }
       }
 
-      animFrameRef.current = requestAnimationFrame(updateTime);
+      dispatch({ type: 'SET_CURRENT_TIME', payload: Math.min(newTime, range.end) });
+      animFrameRef.current = requestAnimationFrame(animate);
     };
+    animFrameRef.current = requestAnimationFrame(animate);
+  }, [audioBuffer, currentTime, duration, playbackRate, volume, isLooping,
+      playbackMode, getPlayRange, scheduleNotePlayback, dispatch, getAudioContext, sourceNodeRef]);
 
-    animFrameRef.current = requestAnimationFrame(updateTime);
-
-    source.onended = () => {
-      if (!state.isLooping) {
-        stopPlayback();
-      }
-    };
-  }, [state.audioBuffer, state.currentTime, state.playbackRate, state.volume,
-      state.isLooping, state.duration, dispatch, getAudioContext, sourceNodeRef, stopPlayback]);
-
-  const togglePlay = useCallback(() => {
-    if (state.isPlaying) {
-      // Save current time before stopping
-      stopPlayback();
-    } else {
-      startPlayback();
+  const pause = useCallback(() => {
+    if (sourceNodeRef.current) {
+      try { sourceNodeRef.current.stop(); } catch (_) {}
+      sourceNodeRef.current = null;
     }
-  }, [state.isPlaying, stopPlayback, startPlayback]);
+    stopAllNoteOscillators();
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    dispatch({ type: 'SET_PLAYING', payload: false });
+  }, [dispatch, sourceNodeRef, stopAllNoteOscillators]);
 
-  // Update volume in real-time
+  const stop = useCallback(() => {
+    pause();
+    dispatch({ type: 'SET_CURRENT_TIME', payload: 0 });
+  }, [pause, dispatch]);
+
+  // Update gain when volume changes
   useEffect(() => {
-    if (gainNodeRef.current) {
-      gainNodeRef.current.gain.value = state.volume;
-    }
-  }, [state.volume]);
+    if (gainNodeRef.current) gainNodeRef.current.gain.value = volume;
+  }, [volume]);
 
-  const handleProgressClick = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const ratio = (e.clientX - rect.left) / rect.width;
-    const newTime = ratio * state.duration;
-    dispatch({ type: 'SET_CURRENT_TIME', payload: newTime });
+  useEffect(() => {
+    if (noteGainRef.current) noteGainRef.current.gain.value = noteVolume;
+  }, [noteVolume]);
 
-    if (state.isPlaying) {
-      stopPlayback();
-      setTimeout(() => startPlayback(), 50);
-    }
-  };
-
-  // Cleanup on unmount
+  // Cleanup
   useEffect(() => {
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-      if (sourceNodeRef.current) {
-        try { sourceNodeRef.current.stop(); } catch (e) {}
-      }
+      stopAllNoteOscillators();
     };
-  }, [sourceNodeRef]);
+  }, [stopAllNoteOscillators]);
 
-  if (!state.audioBuffer) return null;
+  const seek = useCallback((e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = (e.clientX - rect.left) / rect.width;
+    const newTime = ratio * duration;
+    dispatch({ type: 'SET_CURRENT_TIME', payload: Math.max(0, Math.min(duration, newTime)) });
+    if (isPlaying) {
+      pause();
+      setTimeout(() => play(), 50);
+    }
+  }, [duration, isPlaying, pause, play, dispatch]);
 
-  const progressPercent = state.duration > 0 ? (state.currentTime / state.duration) * 100 : 0;
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const playbackModes = [
+    { id: 'music', icon: Headphones, label: 'Music only' },
+    { id: 'notes', icon: Music2, label: 'Notes only' },
+    { id: 'both', icon: Music, label: 'Music + Notes' },
+  ];
 
   return (
     <div className="playback-bar">
-      {/* Transport */}
-      <div className="transport-controls">
-        <button
-          className="transport-btn"
-          onClick={() => {
-            dispatch({ type: 'SET_CURRENT_TIME', payload: 0 });
-            if (state.isPlaying) { stopPlayback(); setTimeout(startPlayback, 50); }
-          }}
-          title="Skip to start"
-        >
-          <SkipBack size={16} />
-        </button>
-
-        <button className="transport-btn play-btn" onClick={togglePlay} title={state.isPlaying ? 'Pause' : 'Play'}>
-          {state.isPlaying ? <Pause size={20} /> : <Play size={20} style={{ marginLeft: 2 }} />}
-        </button>
-
-        <button className="transport-btn" onClick={stopPlayback} title="Stop">
+      {/* Left: Transport */}
+      <div className="playback-left">
+        <button className="btn btn-ghost btn-icon" onClick={stop} title="Stop">
           <Square size={14} />
         </button>
-
-        <button
-          className={`transport-btn ${state.isLooping ? 'active' : ''}`}
-          onClick={() => dispatch({ type: 'SET_LOOPING', payload: !state.isLooping })}
-          title="Loop"
-        >
-          <Repeat size={16} />
+        <button className="btn btn-ghost btn-icon playback-play" onClick={isPlaying ? pause : play} title={isPlaying ? 'Pause' : 'Play'}>
+          {isPlaying ? <Pause size={18} /> : <Play size={18} />}
+        </button>
+        <button className={`btn btn-ghost btn-icon ${isLooping ? 'active' : ''}`}
+          onClick={() => dispatch({ type: 'SET_LOOPING', payload: !isLooping })} title="Loop">
+          <Repeat size={14} />
         </button>
       </div>
 
-      {/* Time display */}
-      <div className="time-display">
-        {formatTime(state.currentTime)} / {formatTime(state.duration)}
+      {/* Center: Progress bar */}
+      <div className="playback-center">
+        <span className="playback-time">{formatTime(currentTime)}</span>
+        <div className="progress-bar" onClick={seek}>
+          <div className="progress-fill" style={{ width: `${progress}%` }} />
+          <div className="progress-handle" style={{ left: `${progress}%` }} />
+        </div>
+        <span className="playback-time">{formatTime(duration)}</span>
       </div>
 
-      {/* Progress bar */}
-      <div className="progress-bar-wrapper" onClick={handleProgressClick}>
-        <div className="progress-bar-fill" style={{ width: `${progressPercent}%` }} />
-      </div>
+      {/* Right: Controls */}
+      <div className="playback-right">
+        {/* Playback mode */}
+        <div style={{ display: 'flex', gap: 1, borderRadius: 'var(--radius-sm)', overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+          {playbackModes.map(mode => (
+            <button
+              key={mode.id}
+              className={`btn btn-ghost btn-sm ${playbackMode === mode.id ? 'active' : ''}`}
+              onClick={() => dispatch({ type: 'SET_PLAYBACK_MODE', payload: mode.id })}
+              title={mode.label}
+              style={{ borderRadius: 0, padding: '3px 6px', height: 24 }}
+            >
+              <mode.icon size={12} />
+            </button>
+          ))}
+        </div>
 
-      {/* Tempo / Speed control */}
-      <div className="tempo-control">
-        <Gauge size={14} style={{ color: 'var(--text-tertiary)' }} />
-        <label>Speed</label>
-        <input
-          type="range"
-          className="slider"
-          min="0.25"
-          max="2"
-          step="0.05"
-          value={state.playbackRate}
-          onChange={(e) => dispatch({ type: 'SET_PLAYBACK_RATE', payload: parseFloat(e.target.value) })}
-        />
-        <span className="tempo-value">{state.playbackRate.toFixed(2)}x</span>
-      </div>
+        {/* Playback region */}
+        <select
+          className="select"
+          style={{ width: 80, fontSize: 10, padding: '2px 4px', height: 24 }}
+          value={state.playbackRegion}
+          onChange={e => dispatch({ type: 'SET_PLAYBACK_REGION', payload: e.target.value })}
+        >
+          <option value="full">Full</option>
+          <option value="hereToEnd">Here→End</option>
+          <option value="selection">Selection</option>
+        </select>
 
-      {/* Volume */}
-      <div className="volume-control">
-        {state.volume > 0 ? <Volume2 size={16} /> : <VolumeX size={16} />}
-        <input
-          type="range"
-          className="slider"
-          min="0"
-          max="1"
-          step="0.01"
-          value={state.volume}
-          onChange={(e) => dispatch({ type: 'SET_VOLUME', payload: parseFloat(e.target.value) })}
-        />
+        {/* Speed */}
+        <div style={{ position: 'relative' }}>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => setShowSpeedPopup(!showSpeedPopup)}
+            title="Playback speed"
+            style={{ fontFamily: 'var(--font-mono)', fontSize: 10, height: 24 }}
+          >
+            <Gauge size={12} /> {playbackRate}×
+          </button>
+          {showSpeedPopup && (
+            <div style={{
+              position: 'absolute',
+              bottom: '100%',
+              right: 0,
+              marginBottom: 4,
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-default)',
+              borderRadius: 'var(--radius-md)',
+              padding: 'var(--space-sm)',
+              zIndex: 50,
+              minWidth: 120,
+            }}>
+              <input
+                type="range"
+                className="slider"
+                min="25"
+                max="200"
+                value={playbackRate * 100}
+                onChange={e => dispatch({ type: 'SET_PLAYBACK_RATE', payload: parseInt(e.target.value) / 100 })}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                <span>0.25×</span><span>1×</span><span>2×</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Volume */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Volume2 size={12} style={{ color: 'var(--text-tertiary)' }} />
+          <input
+            type="range"
+            className="slider"
+            style={{ width: 50 }}
+            min="0"
+            max="100"
+            value={volume * 100}
+            onChange={e => dispatch({ type: 'SET_VOLUME', payload: parseInt(e.target.value) / 100 })}
+          />
+        </div>
+
+        {/* Note volume */}
+        {(playbackMode === 'notes' || playbackMode === 'both') && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Music2 size={12} style={{ color: 'var(--accent-tertiary)' }} />
+            <input
+              type="range"
+              className="slider"
+              style={{ width: 50 }}
+              min="0"
+              max="100"
+              value={noteVolume * 100}
+              onChange={e => dispatch({ type: 'SET_NOTE_VOLUME', payload: parseInt(e.target.value) / 100 })}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,22 +1,27 @@
 import React, { useCallback, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { transcriptionManager } from './AudioUploader';
 import { KEY_SIGNATURES, TIME_SIGNATURES } from '../utils/constants';
-import { SlidersHorizontal, Disc3, Hash, Music2, Plus, Minus, ArrowUpDown } from 'lucide-react';
+import InstrumentParts from './InstrumentParts';
+import {
+  SlidersHorizontal, Music2, Hash, ArrowUpDown, Plus, Minus,
+  Lock, Unlock, Eye, EyeOff, GitBranch, Settings2
+} from 'lucide-react';
 
-/**
- * NoteEditor - Note sensitivity slider and properties panel
- * Controls for note correction, measure editing, and beat tapping
- */
+// We'll try importing transcriptionManager from AudioUploader
+// but wrap in a fallback for safety
+let transcriptionManagerRef = null;
+export function setTranscriptionManager(mgr) {
+  transcriptionManagerRef = mgr;
+}
+
 export default function NoteEditor() {
   const { state, dispatch } = useApp();
+  const [showParts, setShowParts] = React.useState(false);
 
   const handleSensitivityChange = useCallback((value) => {
     dispatch({ type: 'SET_SENSITIVITY', payload: value });
-
-    // Re-quantize notes with new sensitivity
-    if (transcriptionManager && transcriptionManager.rawPitchData) {
-      const newNotes = transcriptionManager.reQuantize(value, state.tempo);
+    if (transcriptionManagerRef && transcriptionManagerRef.rawPitchData) {
+      const newNotes = transcriptionManagerRef.reQuantize(value, state.tempo);
       if (newNotes) {
         dispatch({ type: 'SET_NOTES', payload: newNotes });
       }
@@ -25,7 +30,6 @@ export default function NoteEditor() {
 
   return (
     <div className="properties-panel">
-      {/* Panel Header */}
       <div className="panel-header">
         <h3>Properties</h3>
       </div>
@@ -55,12 +59,15 @@ export default function NoteEditor() {
               <span>More notes</span>
             </div>
           </div>
-          <div style={{
-            marginTop: 'var(--space-sm)',
-            fontSize: 'var(--text-xs)',
-            color: 'var(--text-tertiary)',
-          }}>
-            Detected: <strong style={{ color: 'var(--accent-tertiary)' }}>{state.notes.length}</strong> notes
+          <div style={{ marginTop: 'var(--space-xs)', display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)' }}>
+            <span style={{ color: 'var(--text-tertiary)' }}>
+              Notes: <strong style={{ color: 'var(--accent-tertiary)' }}>{state.notes.length}</strong>
+            </span>
+            {state.candidateNotes.length > 0 && (
+              <span style={{ color: 'var(--text-tertiary)' }}>
+                Candidates: <strong style={{ color: 'var(--text-tertiary)' }}>{state.candidateNotes.length}</strong>
+              </span>
+            )}
           </div>
         </div>
       )}
@@ -74,7 +81,6 @@ export default function NoteEditor() {
           </div>
 
           <div className="measure-editor-grid">
-            {/* Tempo */}
             <div className="measure-field">
               <label>Tempo (BPM)</label>
               <input
@@ -87,8 +93,6 @@ export default function NoteEditor() {
                 onChange={(e) => dispatch({ type: 'SET_TEMPO', payload: parseInt(e.target.value) || 120 })}
               />
             </div>
-
-            {/* Key Signature */}
             <div className="measure-field">
               <label>Key</label>
               <select
@@ -102,8 +106,6 @@ export default function NoteEditor() {
                 ))}
               </select>
             </div>
-
-            {/* Time Signature */}
             <div className="measure-field">
               <label>Time Sig</label>
               <select
@@ -120,18 +122,43 @@ export default function NoteEditor() {
                 ))}
               </select>
             </div>
+            <div className="measure-field">
+              <label>Smallest Note</label>
+              <select
+                className="select"
+                style={{ width: '100%' }}
+                value={state.smallestNote}
+                onChange={(e) => dispatch({ type: 'SET_SMALLEST_NOTE', payload: e.target.value })}
+              >
+                <option value="whole">Whole</option>
+                <option value="half">Half</option>
+                <option value="quarter">Quarter</option>
+                <option value="eighth">Eighth</option>
+                <option value="sixteenth">16th</option>
+              </select>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Beat Tapper */}
+      {/* Instrument Parts */}
       {state.audioBuffer && (
         <div className="panel-section">
-          <div className="panel-section-title">
-            <Disc3 size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />
-            Beat Tapper
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+            onClick={() => setShowParts(!showParts)}>
+            <div className="panel-section-title" style={{ marginBottom: 0 }}>
+              <Settings2 size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />
+              Instrument Parts
+            </div>
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>
+              {showParts ? '▲' : '▼'} {state.instrumentParts.length} parts
+            </span>
           </div>
-          <BeatTapper />
+          {showParts && (
+            <div style={{ marginTop: 'var(--space-sm)' }}>
+              <InstrumentParts />
+            </div>
+          )}
         </div>
       )}
 
@@ -158,17 +185,27 @@ export default function NoteEditor() {
               </div>
               <div className="property-row">
                 <span className="property-label">Confidence</span>
-                <span className="property-value">{Math.round(state.selectedNotes[0].confidence * 100)}%</span>
+                <span className="property-value">{Math.round((state.selectedNotes[0].confidence || 0) * 100)}%</span>
               </div>
               <div className="property-row">
-                <span className="property-label">Start</span>
-                <span className="property-value">{state.selectedNotes[0].startTime.toFixed(3)}s</span>
+                <span className="property-label">Group</span>
+                <span className="property-value">{state.noteGroups.find(g => g.id === (state.selectedNotes[0].group || 0))?.name || 'Default'}</span>
               </div>
+              <div className="property-row">
+                <span className="property-label">Locked</span>
+                <span className="property-value">{state.lockedNoteIds.has(state.selectedNotes[0].id) ? 'Yes' : 'No'}</span>
+              </div>
+              {state.selectedNotes[0].isTriplet && (
+                <div className="property-row">
+                  <span className="property-label">Triplet</span>
+                  <span className="property-value" style={{ color: 'var(--color-warning)' }}>Yes</span>
+                </div>
+              )}
             </div>
           )}
           {state.selectedNotes.length > 1 && (
             <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>
-              {state.selectedNotes.length} notes selected. Use Copy/Paste/Delete from the sidebar.
+              {state.selectedNotes.length} notes selected
             </div>
           )}
         </div>
@@ -183,7 +220,6 @@ export default function NoteEditor() {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-xs)' }}>
             <button className="btn btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => {
-              // Double beats: halve each note duration
               const doubled = state.notes.map(n => ({
                 ...n,
                 startTime: n.startTime / 2,
@@ -195,7 +231,6 @@ export default function NoteEditor() {
               <Plus size={12} /> Double Beats
             </button>
             <button className="btn btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => {
-              // Halve beats: double each note duration
               const halved = state.notes.map(n => ({
                 ...n,
                 startTime: n.startTime * 2,
@@ -209,66 +244,6 @@ export default function NoteEditor() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-/**
- * BeatTapper - Tap tempo tool
- */
-function BeatTapper() {
-  const { dispatch } = useApp();
-  const tapsRef = useRef([]);
-  const [bpm, setBpm] = React.useState(null);
-
-  const handleTap = () => {
-    const now = performance.now();
-    tapsRef.current.push(now);
-
-    // Keep last 8 taps
-    if (tapsRef.current.length > 8) {
-      tapsRef.current = tapsRef.current.slice(-8);
-    }
-
-    if (tapsRef.current.length >= 2) {
-      const intervals = [];
-      for (let i = 1; i < tapsRef.current.length; i++) {
-        intervals.push(tapsRef.current[i] - tapsRef.current[i - 1]);
-      }
-      const avg = intervals.reduce((a, b) => a + b, 0) / intervals.length;
-      const detectedBPM = Math.round(60000 / avg);
-      setBpm(detectedBPM);
-
-      // Auto-clear after 3 seconds of inactivity
-      setTimeout(() => {
-        if (performance.now() - tapsRef.current[tapsRef.current.length - 1] > 3000) {
-          tapsRef.current = [];
-        }
-      }, 3500);
-    }
-  };
-
-  const applyBPM = () => {
-    if (bpm) {
-      dispatch({ type: 'SET_TEMPO', payload: bpm });
-    }
-  };
-
-  return (
-    <div className="beat-tapper">
-      <button className="tap-button" onClick={handleTap}>
-        TAP
-      </button>
-      {bpm && (
-        <>
-          <div className="tap-bpm">{bpm}</div>
-          <div className="tap-label">BPM Detected</div>
-          <button className="btn btn-sm btn-primary" onClick={applyBPM}>
-            Apply Tempo
-          </button>
-        </>
-      )}
-      {!bpm && <div className="tap-label">Tap to detect tempo</div>}
     </div>
   );
 }

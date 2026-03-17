@@ -1,32 +1,48 @@
-import React, { useCallback, useState, useRef } from 'react';
+import React, { useCallback, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { TranscriptionManager } from '../engine/TranscriptionManager';
-import { Upload, Music, FileAudio, Sparkles } from 'lucide-react';
+import { SpectrogramEngine } from '../engine/SpectrogramEngine';
+import { setTranscriptionManager } from './NoteEditor';
+import { midiToNoteName } from '../utils/musicTheory';
+import { Upload, Sparkles, Music, Guitar, Zap, FileAudio } from 'lucide-react';
 
-const transcriptionManager = new TranscriptionManager();
+const SUPPORTED_AUDIO = ['audio/wav', 'audio/mpeg', 'audio/mp3', 'audio/flac', 'audio/ogg',
+  'audio/x-wav', 'audio/x-flac', 'audio/vorbis', 'audio/webm'];
+const SUPPORTED_EXT = ['.wav', '.mp3', '.flac', '.ogg', '.mid', '.midi', '.xml', '.musicxml'];
 
-// Make it accessible for re-quantization
-export { transcriptionManager };
+// Expose the transcription manager for NoteEditor re-quantization
+export let transcriptionManager = null;
 
 export default function AudioUploader() {
   const { state, dispatch, getAudioContext } = useApp();
-  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef(null);
+  const [isDragging, setIsDragging] = React.useState(false);
 
-  const handleFile = useCallback(async (file) => {
-    if (!file) return;
+  const processFile = useCallback(async (file, settings = null) => {
+    const effectiveSettings = settings || state.fileSettings;
 
-    const validTypes = ['audio/wav', 'audio/mpeg', 'audio/mp3', 'audio/x-wav', 'audio/wave'];
-    const ext = file.name.split('.').pop().toLowerCase();
-    if (!validTypes.includes(file.type) && !['wav', 'mp3'].includes(ext)) {
-      alert('Please upload a .wav or .mp3 file');
+    // Validate file extension
+    const ext = '.' + file.name.split('.').pop().toLowerCase();
+    const isAudio = SUPPORTED_AUDIO.includes(file.type) || ['.wav', '.mp3', '.flac', '.ogg'].includes(ext);
+    const isMidi = ['.mid', '.midi'].includes(ext);
+    const isXml = ['.xml', '.musicxml'].includes(ext);
+
+    if (!isAudio && !isMidi && !isXml) {
+      alert('Unsupported file format. Please use WAV, MP3, FLAC, OGG, MIDI, or MusicXML.');
       return;
     }
 
+    if (isMidi || isXml) {
+      // For MIDI/XML, just store the file for now
+      dispatch({ type: 'SET_AUDIO', payload: { file, buffer: null, name: file.name, duration: 0 } });
+      return;
+    }
+
+    // Decode audio
     try {
+      const audioCtx = getAudioContext();
       const arrayBuffer = await file.arrayBuffer();
-      const audioContext = getAudioContext();
-      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
 
       dispatch({
         type: 'SET_AUDIO',
@@ -38,136 +54,190 @@ export default function AudioUploader() {
         },
       });
 
-      // Start transcription automatically
-      dispatch({ type: 'START_TRANSCRIPTION' });
+      // Auto-transcribe if processing mode is findNotes
+      if (effectiveSettings.processingMode === 'findNotes') {
+        dispatch({ type: 'START_TRANSCRIPTION' });
 
-      const result = await transcriptionManager.transcribe(
-        audioBuffer,
-        state.sensitivity,
-        ({ progress, step }) => {
+        const mgr = new TranscriptionManager();
+        transcriptionManager = mgr;
+        setTranscriptionManager(mgr);
+
+        try {
+          const result = await mgr.transcribe(
+            audioBuffer,
+            state.sensitivity,
+            ({ progress, step }) => {
+              dispatch({ type: 'UPDATE_TRANSCRIPTION_PROGRESS', payload: { progress, step } });
+            }
+          );
+
+          // Generate candidate notes (lower confidence pitched frames)
+          const candidateNotes = generateCandidateNotes(mgr.rawPitchData, result.notes, result.tempo);
+
           dispatch({
-            type: 'UPDATE_TRANSCRIPTION_PROGRESS',
-            payload: { progress, step },
+            type: 'SET_TRANSCRIPTION_RESULT',
+            payload: {
+              notes: result.notes,
+              candidateNotes,
+              beats: result.beats,
+              tempo: result.tempo,
+              timeSignature: result.timeSignature,
+              measures: result.measures,
+            },
           });
+        } catch (err) {
+          console.error('Transcription failed:', err);
+          dispatch({ type: 'SET_TRANSCRIPTION_RESULT', payload: { notes: [], candidateNotes: [], beats: [], tempo: 120, timeSignature: { num: 4, den: 4 }, measures: [] } });
         }
-      );
+      }
 
-      dispatch({
-        type: 'SET_TRANSCRIPTION_RESULT',
-        payload: result,
-      });
+      // Compute spectrogram in background
+      SpectrogramEngine.compute(audioBuffer, {
+        fftSize: effectiveSettings.frequencyResolution,
+        hopSize: effectiveSettings.timeStep,
+      }).then(data => {
+        dispatch({ type: 'SET_SPECTROGRAM_DATA', payload: data });
+      }).catch(err => console.error('Spectrogram failed:', err));
+
     } catch (err) {
-      console.error('Error processing audio:', err);
-      alert('Error processing audio file. Please try a different file.');
-      dispatch({ type: 'SET_TRANSCRIPTION_RESULT', payload: { notes: [], beats: [], tempo: 120, measures: [] } });
+      console.error('Audio decode error:', err);
+      alert('Error decoding audio file. Try converting it to WAV format.');
     }
-  }, [dispatch, getAudioContext, state.sensitivity]);
+  }, [dispatch, getAudioContext, state.sensitivity, state.fileSettings]);
 
   const handleDrop = useCallback((e) => {
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files[0];
-    handleFile(file);
-  }, [handleFile]);
+    if (file) processFile(file);
+  }, [processFile]);
 
-  const handleDragOver = useCallback((e) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
+  const handleFileSelect = useCallback((e) => {
+    const file = e.target.files[0];
+    if (file) processFile(file);
+  }, [processFile]);
 
-  const handleDragLeave = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  // If we already have audio loaded, don't show the landing
+  // If audio is already loaded, don't show uploader
   if (state.audioBuffer) return null;
 
   return (
-    <div className="upload-landing">
-      <div className="upload-hero">
-        <div style={{
-          width: 80,
-          height: 80,
-          borderRadius: 'var(--radius-xl)',
-          background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          margin: '0 auto var(--space-xl)',
-          boxShadow: '0 0 40px var(--accent-glow)',
-        }}>
-          <Sparkles size={36} color="white" />
-        </div>
-        <h2>Transform Audio into Music</h2>
-        <p>
-          Drop an audio file to automatically detect notes, beats, and instruments.
-          AutoScore uses advanced algorithms to create sheet music, tablature, and MIDI.
-        </p>
-      </div>
-
-      <div
-        className={`drop-zone ${isDragging ? 'dragging' : ''}`}
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onClick={() => fileInputRef.current?.click()}
-      >
-        <div className="drop-zone-icon">
-          <Upload size={28} />
-        </div>
-        <div className="drop-zone-text">
-          <strong>Drop audio file here or click to browse</strong>
-          <span>Upload a .wav or .mp3 file to get started</span>
-        </div>
-        <div className="drop-zone-formats">
-          <span className="format-badge">.WAV</span>
-          <span className="format-badge">.MP3</span>
-        </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".wav,.mp3,audio/wav,audio/mpeg"
-          style={{ display: 'none' }}
-          onChange={(e) => handleFile(e.target.files[0])}
-        />
-      </div>
-
-      <div style={{
-        display: 'flex',
-        gap: 'var(--space-xl)',
-        marginTop: 'var(--space-lg)',
-        flexWrap: 'wrap',
-        justifyContent: 'center',
-      }}>
-        {[
-          { icon: Music, label: 'Sheet Music', desc: 'Standard notation' },
-          { icon: FileAudio, label: 'Guitar Tabs', desc: 'Tablature format' },
-          { icon: Sparkles, label: 'AI Detection', desc: 'Auto note finding' },
-        ].map(({ icon: Icon, label, desc }) => (
-          <div key={label} style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 'var(--space-xs)',
-            color: 'var(--text-tertiary)',
-            fontSize: 'var(--text-sm)',
-          }}>
-            <div style={{
-              width: 40,
-              height: 40,
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--bg-tertiary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <Icon size={18} />
-            </div>
-            <strong style={{ color: 'var(--text-secondary)' }}>{label}</strong>
-            <span style={{ fontSize: 'var(--text-xs)' }}>{desc}</span>
+    <div className="uploader-page">
+      <div className="uploader-content">
+        <div className="uploader-branding">
+          <div className="brand-sparkle">
+            <Sparkles size={28} />
           </div>
-        ))}
+          <h1>Transform Audio into Music</h1>
+          <p>Drop an audio file to automatically detect notes, beats, and instruments.
+             AutoScore uses advanced algorithms to create sheet music, tablature, and MIDI.</p>
+        </div>
+
+        <div
+          className={`drop-zone ${isDragging ? 'dragging' : ''}`}
+          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <div className="drop-zone-icon">
+            <Upload size={24} />
+          </div>
+          <div className="drop-zone-text">
+            <strong>Drop audio file here or click to browse</strong>
+            <span>Upload a .wav or .mp3 file to get started</span>
+          </div>
+          <div className="format-badges">
+            {['.WAV', '.MP3', '.FLAC', '.OGG'].map(fmt => (
+              <span key={fmt} className="format-badge">{fmt}</span>
+            ))}
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".wav,.mp3,.flac,.ogg,.mid,.midi,.xml,.musicxml"
+            style={{ display: 'none' }}
+            onChange={handleFileSelect}
+          />
+        </div>
+
+        <div className="feature-cards">
+          <div className="feature-card">
+            <div className="feature-icon"><Music size={20} /></div>
+            <strong>Sheet Music</strong>
+            <span>Standard notation</span>
+          </div>
+          <div className="feature-card">
+            <div className="feature-icon"><Guitar size={20} /></div>
+            <strong>Guitar Tabs</strong>
+            <span>Tablature format</span>
+          </div>
+          <div className="feature-card">
+            <div className="feature-icon"><Zap size={20} /></div>
+            <strong>AI Detection</strong>
+            <span>Auto note finding</span>
+          </div>
+        </div>
       </div>
     </div>
   );
+}
+
+/**
+ * Generate candidate notes from pitch data that weren't selected as primary notes
+ */
+function generateCandidateNotes(pitchData, selectedNotes, tempo) {
+  if (!pitchData || pitchData.length === 0) return [];
+
+  const candidates = [];
+  const beatDuration = 60 / tempo;
+  let currentCandidate = null;
+
+  for (const frame of pitchData) {
+    if (!frame.hasPitch) {
+      if (currentCandidate) {
+        currentCandidate.endTime = frame.time;
+        currentCandidate.duration = currentCandidate.endTime - currentCandidate.startTime;
+        if (currentCandidate.duration > 0.05 && currentCandidate.duration < 4) {
+          candidates.push(currentCandidate);
+        }
+        currentCandidate = null;
+      }
+      continue;
+    }
+
+    // Check if this frame is already in a selected note
+    const midi = Math.round(12 * Math.log2(frame.frequency / 440) + 69);
+    const isSelected = selectedNotes.some(n =>
+      n.midi === midi && frame.time >= n.startTime && frame.time <= n.endTime
+    );
+
+    if (!isSelected && frame.confidence > 0.4 && frame.confidence < 0.7) {
+      if (!currentCandidate || Math.abs(currentCandidate.midi - midi) > 1) {
+        if (currentCandidate) {
+          currentCandidate.endTime = frame.time;
+          currentCandidate.duration = currentCandidate.endTime - currentCandidate.startTime;
+          if (currentCandidate.duration > 0.05) candidates.push(currentCandidate);
+        }
+        currentCandidate = {
+          id: `candidate-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+          midi,
+          noteName: midiToNoteName(midi),
+          frequency: frame.frequency,
+          startTime: frame.time,
+          endTime: frame.time,
+          duration: 0,
+          confidence: frame.confidence,
+          isCandidate: true,
+          group: 0,
+        };
+      }
+    } else if (currentCandidate) {
+      currentCandidate.endTime = frame.time;
+      currentCandidate.duration = currentCandidate.endTime - currentCandidate.startTime;
+      if (currentCandidate.duration > 0.05) candidates.push(currentCandidate);
+      currentCandidate = null;
+    }
+  }
+
+  return candidates.slice(0, 200); // Cap to avoid performance issues
 }
