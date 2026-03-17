@@ -12,12 +12,13 @@ import PianoRollEditor from './components/PianoRollEditor';
 import SpectrogramViewer from './components/SpectrogramViewer';
 import LyricsViewer from './components/LyricsViewer';
 import StemMixer from './components/StemMixer';
+import VocalTuner from './components/VocalTuner';
 import NoteEditor from './components/NoteEditor';
 import MeasureEditingMode from './components/MeasureEditingMode';
 import ExportDialog from './components/ExportDialog';
 import OpenFileDialog from './components/OpenFileDialog';
 import SettingsDialog from './components/SettingsDialog';
-import { Music, Guitar, Piano, BarChart3, Type, LayoutList, Activity } from 'lucide-react';
+import { Music, Guitar, Piano, BarChart3, Type, LayoutList, Activity, Mic2 } from 'lucide-react';
 
 const viewTabs = [
   { id: 'sheet', label: 'Sheet Music', icon: Music },
@@ -26,6 +27,7 @@ const viewTabs = [
   { id: 'spectrogram', label: 'Spectrogram', icon: BarChart3 },
   { id: 'lyrics', label: 'Lyrics', icon: Type },
   { id: 'stems', label: 'Stems', icon: Activity },
+  { id: 'autotune', label: 'AutoTune', icon: Mic2 },
 ];
 
 export default function App() {
@@ -51,6 +53,7 @@ export default function App() {
       case 'spectrogram': return <SpectrogramViewer />;
       case 'lyrics': return <LyricsViewer />;
       case 'stems': return <StemMixer />;
+      case 'autotune': return <VocalTuner />;
       default: return <SheetMusicViewer />;
     }
   };

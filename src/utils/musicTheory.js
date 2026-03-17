@@ -92,19 +92,122 @@ export function formatTime(seconds) {
 }
 
 /**
- * Get guitar tab fret position for a MIDI note given a tuning
+ * Get ALL possible guitar tab fret positions for a MIDI note given a tuning
  */
-export function midiToTabPosition(midi, tuning) {
+export function getPossibleTabPositions(midi, tuning, maxFret = 24) {
     const positions = [];
     for (let s = 0; s < tuning.length; s++) {
         const fret = midi - tuning[s];
-        if (fret >= 0 && fret <= 24) {
+        if (fret >= 0 && fret <= maxFret) {
             positions.push({ string: s, fret });
         }
     }
-    // Sort by lower fret preferred
+    // Sort by fret ascending (prefer lower frets generally)
     positions.sort((a, b) => a.fret - b.fret);
+    return positions;
+}
+
+/**
+ * Kept for backwards compatibility. Returns the tightest/lowest position.
+ */
+export function midiToTabPosition(midi, tuning) {
+    const positions = getPossibleTabPositions(midi, tuning);
     return positions.length > 0 ? positions[0] : null;
+}
+
+/**
+ * Context-aware fingering algorithm.
+ * Mutates the passed `notes` array to add `.tabString`, `.tabFret`, and `.finger`.
+ * Attempts to minimize hand movement across the fretboard.
+ */
+export function calculateGuitarFingering(notes, tuning, maxFret = 24) {
+    if (!notes || notes.length === 0 || !tuning) return notes;
+
+    let currentPosition = 0; // The fret the index finger is hovering over
+
+    for (let i = 0; i < notes.length; i++) {
+        const note = notes[i];
+        
+        // Skip rests or unpitched
+        if (!note.midi) {
+             note.hasPosition = false;
+             continue;
+        }
+
+        const possible = getPossibleTabPositions(note.midi, tuning, maxFret);
+        
+        if (possible.length === 0) {
+            note.hasPosition = false;
+            note.tabFret = '?';
+            note.tabString = 0;
+            note.finger = '?';
+            continue;
+        }
+
+        let bestPos = possible[0];
+        
+        // If we established a hand position previously, try to find a note that fits in it.
+        // Hand position covers ~4 frets.
+        if (i > 0 && currentPosition > 0) {
+             let minPenalty = Infinity;
+             
+             for (const pos of possible) {
+                 if (pos.fret === 0) {
+                     // Open strings are always 'free' to play
+                     if (0 < minPenalty) {
+                         minPenalty = 0;
+                         bestPos = pos;
+                     }
+                     continue;
+                 }
+
+                 // Calculate penalty based on distance from current hand position
+                 // Normal stretch is currentPosition to currentPosition + 3 (4 frets)
+                 let penalty = 0;
+                 if (pos.fret < currentPosition) {
+                     penalty = currentPosition - pos.fret; // Reaching back
+                 } else if (pos.fret > currentPosition + 3) {
+                     penalty = pos.fret - (currentPosition + 3); // Reaching forward
+                 }
+
+                 // Prefer thicker strings for higher notes if it keeps us in position
+                 // Add a slight penalty for playing very high up on thick strings unless forced
+                 if (pos.fret > 12 && pos.string > 3) {
+                     penalty += (pos.fret - 12) * 0.5;
+                 }
+
+                 if (penalty < minPenalty) {
+                     minPenalty = penalty;
+                     bestPos = pos;
+                 }
+             }
+        }
+
+        note.tabString = bestPos.string;
+        note.tabFret = bestPos.fret;
+        note.hasPosition = true;
+
+        // Assign finger (1=Index, 2=Middle, 3=Ring, 4=Pinky, 0=Open)
+        if (note.tabFret === 0) {
+            note.finger = 0;
+        } else {
+            // Update the running hand position if we jumped
+            if (currentPosition === 0 || note.tabFret < currentPosition || note.tabFret > currentPosition + 4) {
+                 // For absolute basic positioning, assume index finger plants on the fret
+                 // UNLESS it's the start of a scale going down, then maybe plant pinky. 
+                 // We will just plant Index for simplicity in this baseline model.
+                 currentPosition = Math.max(1, note.tabFret);
+            }
+            
+            let relativeFinger = (note.tabFret - currentPosition) + 1;
+            // Bound it to 1-4
+            if (relativeFinger > 4) relativeFinger = 4;
+            if (relativeFinger < 1) relativeFinger = 1;
+            note.finger = relativeFinger;
+        }
+    }
+    
+    return notes;
 }
 
 /**
@@ -125,5 +228,6 @@ export function getScaleNotes(key, mode = 'major') {
  * Check if a MIDI note is within an instrument's range
  */
 export function isInRange(midi, instrument) {
+    if (!instrument || !instrument.range) return true;
     return midi >= instrument.range.low && midi <= instrument.range.high;
 }
