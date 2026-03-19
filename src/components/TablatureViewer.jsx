@@ -274,18 +274,29 @@ export default function TablatureViewer() {
             </h3>
             
             {systems.map((system, si) => {
-              const systemWidth = 840; // Total width of the tab system
+              const systemWidth = 840; 
               const totalMWidth = system.measures.reduce((acc, m) => acc + m.width, 0);
               const justification = systemWidth / totalMWidth;
 
               return (
-                <div key={si} style={{ marginBottom: '80px', position: 'relative', width: systemWidth }}>
+                <div key={si} style={{ marginBottom: '100px', position: 'relative', width: systemWidth }}>
                   
                   {/* Measure Bar Lines Background */}
                   {(() => {
                     let curX = 0;
                     return system.measures.map((m, mi) => {
                        const mWidth = m.width * justification;
+                       
+                       // Group notes by time for vertical alignment
+                       const timeGroups = {};
+                       m.notes.forEach(note => {
+                          const time = Math.round(note.startTime * 1000) / 1000;
+                          if (!timeGroups[time]) timeGroups[time] = [];
+                          timeGroups[time].push(note);
+                       });
+
+                       const sortedTimes = Object.keys(timeGroups).sort((a, b) => a - b);
+
                        const result = (
                           <div key={mi} style={{
                               position: 'absolute',
@@ -293,42 +304,126 @@ export default function TablatureViewer() {
                               bottom: 0,
                               left: `${curX}px`,
                               width: `${mWidth}px`,
-                              borderLeft: '1px solid #777',
-                              paddingLeft: '4px',
+                              borderLeft: '1px solid #000',
                           }}>
-                              <span style={{ color: '#888', fontSize: '9px' }}>{m.number}</span>
+                              <span style={{ color: '#000', fontSize: '11px', position: 'absolute', top: '-15px', fontWeight: 'bold' }}>{m.number}</span>
                               
                               {/* Chord Name above measure */}
                               {(() => {
-                                const mChord = chords.find(c => c.startTime >= m.startTime && c.startTime < m.endTime);
+                                const mChord = chords.find(c => Math.abs(c.startTime - m.startTime) < 0.1);
                                 return mChord ? (
-                                  <div style={{ position: 'absolute', top: '-25px', left: '50%', transform: 'translateX(-50%)', fontWeight: 'bold', color: '#1e40af', fontSize: '13px' }}>
+                                  <div style={{ position: 'absolute', top: '-45px', left: '0', fontWeight: 'bold', color: '#000', fontSize: '15px', fontFamily: 'serif' }}>
                                     {mChord.name}
                                   </div>
                                 ) : null;
                               })()}
 
-                              {/* Measure notes */}
+                              {/* Measure notes & Rhythmic Stems */}
                               <div style={{ position: 'relative', height: '100%' }}>
-                                {m.notes.map(note => {
-                                   const noteX = ((note.startTime - m.startTime) / (m.endTime - m.startTime)) * mWidth;
-                                   const isPlaying = note.startTime <= currentTime && note.endTime > currentTime;
+                                {sortedTimes.map((time, ti) => {
+                                   const group = timeGroups[time];
+                                   const noteX = ((parseFloat(time) - m.startTime) / (m.endTime - m.startTime)) * mWidth;
+                                   const isPlaying = group.some(n => n.startTime <= currentTime && n.endTime > currentTime);
+                                   
+                                   const minStr = Math.min(...group.map(n => n.tabString));
+                                   const maxStr = Math.max(...group.map(n => n.tabString));
+                                   const duration = group[0].durationName || 'quarter';
+
                                    return (
-                                     <div key={note.id} style={{
-                                        position: 'absolute',
-                                        left: `${noteX}px`,
-                                        top: `${note.tabString * 15 - 8}px`, // 15px is the gap
-                                        background: isPlaying ? 'var(--accent-primary)' : '#fff',
-                                        color: isPlaying ? '#fff' : '#000',
-                                        fontWeight: 'bold',
-                                        padding: '0 2px',
-                                        fontSize: '11px',
-                                        fontFamily: 'monospace',
-                                        zIndex: 2,
-                                        transform: 'translateX(-50%)'
-                                     }}>
-                                        {note.tabFret}
-                                     </div>
+                                     <React.Fragment key={time}>
+                                       {/* P.M. Annotation if applicable */}
+                                       {group.some(n => n.palmMute) && (
+                                         <div style={{ position: 'absolute', left: `${noteX}px`, top: '-25px', fontSize: '9px', fontWeight: 'bold', transform: 'translateX(-50%)' }}>
+                                           P.M.
+                                         </div>
+                                       )}
+
+                                       {/* Note Numbers */}
+                                       {group.map(note => (
+                                         <div key={note.id} style={{
+                                            position: 'absolute',
+                                            left: `${noteX}px`,
+                                            top: `${note.tabString * 15 - 8}px`,
+                                            background: isPlaying ? 'var(--accent-primary)' : '#fff',
+                                            color: isPlaying ? '#fff' : '#000',
+                                            fontWeight: 'bold',
+                                            padding: '0 2px',
+                                            fontSize: '12px',
+                                            fontFamily: 'serif',
+                                            zIndex: 2,
+                                            transform: 'translateX(-50%)'
+                                         }}>
+                                            {note.tabFret}
+                                         </div>
+                                       ))}
+
+                                       {/* Vertical Rhythmic Stem (below tab) */}
+                                       {duration !== 'whole' && (
+                                          <div style={{
+                                             position: 'absolute',
+                                             left: `${noteX}px`,
+                                             top: `${strings * 15}px`, // Always below the last string
+                                             width: '1px',
+                                             height: '30px',
+                                             background: '#000',
+                                             zIndex: 1
+                                          }}>
+                                             {/* Flags for eighth/sixteenth if not beamed */}
+                                             {(duration === 'eighth' || duration === 'sixteenth') && (
+                                                <div style={{ 
+                                                  position: 'absolute', 
+                                                  bottom: 0, 
+                                                  right: '-6px', 
+                                                  width: '6px', 
+                                                  height: '1px', 
+                                                  background: '#000',
+                                                  transform: 'rotate(-45deg)',
+                                                  transformOrigin: 'left'
+                                                }} />
+                                             )}
+                                             {duration === 'sixteenth' && (
+                                                <div style={{ 
+                                                  position: 'absolute', 
+                                                  bottom: '6px', 
+                                                  right: '-6px', 
+                                                  width: '6px', 
+                                                  height: '1px', 
+                                                  background: '#000',
+                                                  transform: 'rotate(-45deg)',
+                                                  transformOrigin: 'left'
+                                                }} />
+                                             )}
+                                          </div>
+                                       )}
+
+                                       {/* Beams (Thick horizontal connector for fast notes) */}
+                                       {(() => {
+                                          const nextTime = sortedTimes[ti+1];
+                                          if (!nextTime) return null;
+                                          const nextGroup = timeGroups[nextTime];
+                                          const nextDur = nextGroup[0].durationName;
+                                          if ((duration === 'eighth' || duration === 'sixteenth') && (nextDur === 'eighth' || nextDur === 'sixteenth')) {
+                                             const nextX = ((parseFloat(nextTime) - m.startTime) / (m.endTime - m.startTime)) * mWidth;
+                                             return (
+                                               <div style={{
+                                                 position: 'absolute',
+                                                 left: `${noteX}px`,
+                                                 top: `${strings * 15 + 26}px`,
+                                                 width: `${nextX - noteX}px`,
+                                                 height: '4px',
+                                                 background: '#000',
+                                                 zIndex: 1
+                                               }}>
+                                                  {/* Second beam for sixteenths */}
+                                                  {duration === 'sixteenth' && nextDur === 'sixteenth' && (
+                                                    <div style={{ position: 'absolute', top: '-6px', width: '100%', height: '4px', background: '#000' }} />
+                                                  )}
+                                               </div>
+                                             );
+                                          }
+                                          return null;
+                                       })()}
+                                     </React.Fragment>
                                    );
                                 })}
                               </div>
@@ -346,7 +441,8 @@ export default function TablatureViewer() {
                       flexDirection: 'column', 
                       gap: '14px', 
                       paddingTop: '10px', 
-                      cursor: activeTool === 'notation' ? 'crosshair' : 'default' 
+                      cursor: activeTool === 'notation' ? 'crosshair' : 'default',
+                      borderTop: si === 0 ? '1px solid #000' : 'none' // Top boundary line
                     }}
                     onMouseMove={(e) => {
                       if (activeTool !== 'notation') return;

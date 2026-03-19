@@ -124,54 +124,65 @@ export default function SheetMusicViewer() {
         
         // Draw Barline
         ctx.strokeStyle = '#000';
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 1.8;
         ctx.beginPath();
         ctx.moveTo(measureX + mWidth, systemY);
         ctx.lineTo(measureX + mWidth, systemY + STAFF_HEIGHT);
         ctx.stroke();
 
         // Draw Measure Number
-        ctx.font = 'italic 10px serif';
-        ctx.fillStyle = '#888';
-        ctx.fillText(measure.number, measureX, systemY - 10);
+        ctx.font = 'bold 11px serif';
+        ctx.fillStyle = '#000';
+        ctx.fillText(measure.number, measureX + 2, systemY - 12);
 
-        // Draw Chord if present in this timeframe
-        const measureChord = chords.find(c => c.startTime >= measure.startTime && c.startTime < measure.endTime);
+        // Draw Chord above measure
+        const measureChord = chords.find(c => Math.abs(c.startTime - measure.startTime) < 0.1);
         if (measureChord) {
-          ctx.font = 'bold 12px serif';
+          ctx.font = 'bold 15px serif';
           ctx.fillStyle = colors.chord;
           ctx.textAlign = 'center';
-          ctx.fillText(measureChord.name, measureX + mWidth / 2, systemY - 25);
+          ctx.fillText(measureChord.name, measureX + mWidth / 2, systemY - 35);
           ctx.textAlign = 'left';
         }
 
         // Draw Notes in measure
-        const noteSpacing = mWidth / (measure.notes.length + 1);
-        measure.notes.forEach((note, nIdx) => {
-          const noteX = measureX + noteSpacing * (nIdx + 1);
-          const noteY = midiToStaffY(note.midi, systemY, LINE_SPACING, instrument.clef);
-          
-          const isPlaying = note.startTime <= currentTime && note.endTime > currentTime;
-          const isSelected = selectedNotes.some(sn => sn.id === note.id);
-          const color = isPlaying ? colors.playing : (isSelected ? colors.selected : colors.note);
+        // Group notes by time for chords
+        const timeGroups = {};
+        measure.notes.forEach(note => {
+           const time = Math.round(note.startTime * 1000) / 1000;
+           if (!timeGroups[time]) timeGroups[time] = [];
+           timeGroups[time].push(note);
+        });
 
-          // Note specific logic
-          drawLedgerLines(ctx, noteX, noteY, systemY, systemY + STAFF_HEIGHT, LINE_SPACING);
-          drawNote(ctx, noteX, noteY, color, note.durationName || 'quarter', LINE_SPACING);
+        const sortedTimes = Object.keys(timeGroups).sort((a, b) => a - b);
+        const notePadding = 25;
+        const availableNoteSpace = mWidth - notePadding * 2;
+        
+        sortedTimes.forEach((time, ti) => {
+          const group = timeGroups[time];
+          const noteX = measureX + notePadding + (ti / (sortedTimes.length || 1)) * availableNoteSpace;
           
-          // Draw note name help if enabled (or just because it looks cool)
-          ctx.font = '8px sans-serif';
-          ctx.fillStyle = 'rgba(0,0,0,0.3)';
-          ctx.fillText(note.noteName, noteX - 5, systemY + STAFF_HEIGHT + 15);
+          group.forEach(note => {
+            const noteY = midiToStaffY(note.midi, systemY, LINE_SPACING, instrument.clef);
+            
+            const isPlaying = note.startTime <= currentTime && note.endTime > currentTime;
+            const isSelected = selectedNotes.some(sn => sn.id === note.id);
+            const color = isPlaying ? colors.playing : (isSelected ? colors.selected : colors.note);
+
+            drawLedgerLines(ctx, noteX, noteY, systemY, systemY + STAFF_HEIGHT, LINE_SPACING);
+            
+            // Accidental if present
+            if (note.accidental || (note.noteName.includes('#') && !detectedKey?.sharps?.includes(note.noteName[0]))) {
+              drawAccidental(ctx, noteX - 14, noteY, note.accidental || 'sharp', LINE_SPACING);
+            }
+
+            drawNote(ctx, noteX, noteY, color, note.durationName || 'quarter', LINE_SPACING);
+          });
         });
 
         // --- DRAW WAVEFORM UNDER SYSTEM ---
         if (mIdx === 0 && audioBuffer) {
-           // We'll draw the waveform for the whole system here to avoid multiple canvas overlaps
-           // but technically we should have a separate React component or just draw it on canvas.
-           // Since we have SystemWaveform component, we'll try to use it via a portal or similar,
-           // but for simplicity in this canvas, let's just draw a basic envelope here.
-           drawSystemWaveformInternal(ctx, padding, systemY + STAFF_HEIGHT + 40, width - padding * 2, 60, audioBuffer, system.measures[0].startTime, system.measures[system.measures.length-1].endTime);
+           drawSystemWaveformInternal(ctx, padding, systemY + STAFF_HEIGHT + 45, width - padding * 2, 50, audioBuffer, system.measures[0].startTime, system.measures[system.measures.length-1].endTime);
         }
 
         measureX += mWidth;
@@ -183,9 +194,12 @@ export default function SheetMusicViewer() {
        const { x, y, midi } = hoverNote;
        drawNote(ctx, x, y, 'rgba(124, 92, 252, 0.4)', notationDuration, LINE_SPACING);
        drawLedgerLines(ctx, x, y, hoverNote.staffTop, hoverNote.staffTop + STAFF_HEIGHT, LINE_SPACING);
+       if (notationAccidental !== 'none') {
+         drawAccidental(ctx, x - 14, y, notationAccidental, LINE_SPACING);
+       }
     }
 
-  }, [systems, currentTime, selectedNotes, instrument, detectedKey, chords, timeSignature, hoverNote, activeTool, notationDuration, audioBuffer]);
+  }, [systems, currentTime, selectedNotes, instrument, detectedKey, chords, timeSignature, hoverNote, activeTool, notationDuration, notationAccidental, audioBuffer]);
 
   const handleMouseMove = (e) => {
     if (activeTool !== 'notation' || !canvasRef.current) return;
@@ -405,17 +419,19 @@ function drawNote(ctx, x, y, color, duration, lineSpacing) {
   ctx.save();
   ctx.fillStyle = color;
   ctx.strokeStyle = color;
-  ctx.lineWidth = 1.2;
+  ctx.lineWidth = 1.4;
 
   // 1. Note Head (Slanted Ellipse)
-  ctx.beginPath();
   const isHollow = duration === 'whole' || duration === 'half';
-  ctx.ellipse(x, y, 6, 4.5, -0.2, 0, Math.PI * 2);
+  ctx.beginPath();
+  // Slightly slanted and more "egg-shaped" for professional look
+  ctx.ellipse(x, y, 6.2, 4.2, -0.28, 0, Math.PI * 2);
+  
   if (isHollow) {
     ctx.stroke();
-    // Inner hollow
+    // Inner "eye" for hollow notes
     ctx.beginPath();
-    ctx.ellipse(x, y, 3, 2, -0.2, 0, Math.PI * 2);
+    ctx.ellipse(x, y, 2.5, 1.5, -0.28, 0, Math.PI * 2);
     ctx.stroke();
   } else {
     ctx.fill();
@@ -423,83 +439,109 @@ function drawNote(ctx, x, y, color, duration, lineSpacing) {
 
   // 2. Stem
   if (duration !== 'whole') {
-    const stemDir = y > 100 ? -1 : 1; // Simplistic flip logic
+    // Standard stem direction: down if note is above the middle line (3rd line)
+    // Middle line in our coordinate system is systemY + 2 * LINE_SPACING
+    // Let's pass systemY to this function or calculate here.
+    // For now, simplify: if y is below "middle", stem up; if above, stem down.
+    // We'll use a fixed reference for now.
+    const stemDir = y < 140 ? 1 : -1; // 1 is down, -1 is up (screen coords)
     const stemLength = lineSpacing * 3.5;
-    const stemX = x + (stemDir > 0 ? -5.5 : 5.5);
+    // Align stem to the edge of the slanted head
+    const stemX = x + (stemDir < 0 ? 5.8 : -5.8);
     
     ctx.beginPath();
+    ctx.lineWidth = 1.1;
     ctx.moveTo(stemX, y);
     ctx.lineTo(stemX, y + stemDir * stemLength);
     ctx.stroke();
 
-    // 3. Flags/Beams (Simplistic)
+    // 3. Flags
     if (duration === 'eighth' || duration === 'sixteenth') {
-       ctx.beginPath();
-       ctx.moveTo(stemX, y + stemDir * stemLength);
-       ctx.bezierCurveTo(stemX + 8, y + stemDir*(stemLength-5), stemX+6, y + stemDir*(stemLength-15), stemX, y + stemDir*(stemLength-20));
-       ctx.stroke();
+       ctx.lineWidth = 1.2;
+       const flagX = stemX;
+       const flagY = y + stemDir * stemLength;
        
-       if (duration === 'sixteenth') {
+       const drawFlag = (offset) => {
          ctx.beginPath();
-         ctx.moveTo(stemX, y + stemDir * (stemLength - 5));
-         ctx.bezierCurveTo(stemX + 8, y + stemDir*(stemLength-10), stemX+6, y + stemDir*(stemLength-20), stemX, y + stemDir*(stemLength-25));
+         ctx.moveTo(flagX, flagY + offset);
+         ctx.bezierCurveTo(
+           flagX + 8, flagY + offset + (stemDir * -2), 
+           flagX + 7, flagY + offset + (stemDir * -12), 
+           flagX, flagY + offset + (stemDir * -18)
+         );
          ctx.stroke();
-       }
+       };
+
+       drawFlag(0);
+       if (duration === 'sixteenth') drawFlag(stemDir * -6);
     }
   }
 
   ctx.restore();
 }
 
-/**
+function drawAccidental(ctx, x, y, type, lineSpacing) {
+  ctx.font = `bold ${lineSpacing * 2.2}px serif`;
+  ctx.fillStyle = '#000';
+  ctx.textAlign = 'center';
+  const symbol = type === 'sharp' ? '♯' : (type === 'flat' ? '♭' : '♮');
+  ctx.fillText(symbol, x, y + 6);
+  ctx.textAlign = 'left';
+}
+
+/** 
  * Map MIDI note to Y position on the staff
  */
 function midiToStaffY(midi, staffTop, lineSpacing, clef) {
-  // Map note to staff position (0 = bottom line of staff)
-  const notePositions = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6]; // C through B
+  const notePositions = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6]; 
   const octave = Math.floor(midi / 12) - 1;
   const noteInOctave = midi % 12;
   const notePos = notePositions[noteInOctave];
 
   let staffPos;
   if (clef === 'bass') {
-    // Bass clef: A2 (45) is at position 0 (bottom line)
     staffPos = (octave - 2) * 7 + notePos - 5;
   } else {
-    // Treble clef: E4 (64) is at position 0 (bottom line)
     staffPos = (octave - 4) * 7 + notePos - 2;
   }
 
-  // Each staff position = half a line spacing
   const halfSpacing = lineSpacing / 2;
-  const bottomLineY = staffTop + lineSpacing * 4;
+  const bottomLineY = staffTop + staffHeightHelper(4, lineSpacing);
   return bottomLineY - staffPos * halfSpacing;
+}
+
+function staffHeightHelper(lines, spacing) {
+  return lines * spacing;
 }
 
 /**
  * Draw ledger lines above/below staff as needed
  */
 function drawLedgerLines(ctx, x, noteY, staffTop, staffBottom, lineSpacing) {
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 1.2;
+
+  // Extra padding to avoid lines touching the note head too closely
+  const ledgerWidth = 11;
 
   // Below staff
-  if (noteY > staffBottom + lineSpacing / 2) {
-    for (let y = staffBottom + lineSpacing; y <= noteY + 2; y += lineSpacing) {
+  if (noteY >= staffBottom + lineSpacing) {
+    for (let ly = staffBottom + lineSpacing; ly <= noteY + 1; ly += lineSpacing) {
       ctx.beginPath();
-      ctx.moveTo(x - 10, y);
-      ctx.lineTo(x + 10, y);
+      ctx.moveTo(x - ledgerWidth, ly);
+      ctx.lineTo(x + ledgerWidth, ly);
       ctx.stroke();
     }
   }
 
   // Above staff
-  if (noteY < staffTop - lineSpacing / 2) {
-    for (let y = staffTop - lineSpacing; y >= noteY - 2; y -= lineSpacing) {
+  if (noteY <= staffTop - lineSpacing) {
+    for (let ly = staffTop - lineSpacing; ly >= noteY - 1; ly -= lineSpacing) {
       ctx.beginPath();
-      ctx.moveTo(x - 10, y);
-      ctx.lineTo(x + 10, y);
+      ctx.moveTo(x - ledgerWidth, ly);
+      ctx.lineTo(x + ledgerWidth, ly);
       ctx.stroke();
     }
   }
 }
+
