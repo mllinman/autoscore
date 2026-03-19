@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { useLayout } from '../context/LayoutContext';
 import { INSTRUMENTS } from '../utils/constants';
 import {
   Music, FileAudio, Download, Settings, ChevronDown,
@@ -8,14 +9,20 @@ import {
 
 export default function Header() {
   const { state, dispatch } = useApp();
+  const { layout, layoutDispatch } = useLayout();
   const [showFileMenu, setShowFileMenu] = useState(false);
+  const [showViewMenu, setShowViewMenu] = useState(false);
   const fileMenuRef = useRef(null);
+  const viewMenuRef = useRef(null);
 
-  // Close file menu on outside click
+  // Close menus on outside click
   useEffect(() => {
     const handler = (e) => {
       if (fileMenuRef.current && !fileMenuRef.current.contains(e.target)) {
         setShowFileMenu(false);
+      }
+      if (viewMenuRef.current && !viewMenuRef.current.contains(e.target)) {
+        setShowViewMenu(false);
       }
     };
     document.addEventListener('mousedown', handler);
@@ -81,6 +88,69 @@ export default function Header() {
                 setShowFileMenu(false);
               }}>
                 <Settings size={14} /> Preferences
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* View Menu */}
+        <div className="header-menu" ref={viewMenuRef}>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => setShowViewMenu(!showViewMenu)}
+            style={{ fontSize: 'var(--text-sm)', marginLeft: '4px' }}
+            title="View Menu"
+          >
+            View <ChevronDown size={12} />
+          </button>
+
+          {showViewMenu && (
+            <div className="dropdown-menu" style={{
+              position: 'absolute',
+              top: '100%',
+              left: 0,
+              marginTop: 4,
+              minWidth: 160,
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-default)',
+              borderRadius: 'var(--radius-md)',
+              boxShadow: 'var(--shadow-lg)',
+              zIndex: 100,
+              padding: 'var(--space-xs)',
+              overflow: 'hidden',
+            }}>
+              {[
+                { id: 'channels', label: 'Channels' },
+                { id: 'properties', label: 'Properties' },
+                { id: 'tools', label: 'Tools' },
+                { id: 'notations', label: 'Notation & Views' },
+                { id: 'plugins', label: 'Plugins' },
+              ].map(item => (
+                <button
+                  key={item.id}
+                  className="dropdown-item"
+                  onClick={() => {
+                    layoutDispatch({
+                      type: 'SET_PANEL_VISIBILITY',
+                      payload: { panel: item.id, visible: !layout.panelVisibility?.[item.id] }
+                    });
+                  }}
+                >
+                  <div style={{ width: 14, display: 'inline-block' }}>
+                    {layout.panelVisibility?.[item.id] ? '✓ ' : ''}
+                  </div>
+                  {item.label}
+                </button>
+              ))}
+              <div style={{ height: 1, background: 'var(--border-subtle)', margin: '4px 0' }} />
+              <button
+                className="dropdown-item"
+                onClick={() => {
+                  layoutDispatch({ type: 'RESET_LAYOUT' });
+                  setShowViewMenu(false);
+                }}
+              >
+                Reset Layout
               </button>
             </div>
           )}

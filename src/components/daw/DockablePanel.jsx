@@ -16,12 +16,13 @@ export default function DockablePanel({
   className = '',
   headerActions,
   noPadding = false,
+  sourceZone
 }) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
   const [{ isDragging }, dragRef, previewRef] = useDrag({
     type: PANEL_DND_TYPE,
-    item: { id, title },
+    item: { id, title, sourceZone },
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
     }),

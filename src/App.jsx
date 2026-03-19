@@ -22,18 +22,21 @@ import NotationTabs from './components/daw/NotationTabs';
 import { Menu, Sliders, Settings, PenTool, LayoutList, Music, Plug } from 'lucide-react';
 
 const PANEL_CONFIG = {
-  header: { component: Header, title: 'MAIN MENU', icon: Menu, noPadding: true, collapsible: false },
+  header: { component: Header, title: 'MAIN MENU', icon: Menu, noPadding: true, collapsible: false, closable: false },
   channels: { component: ChannelStrip, title: 'CHANNELS', icon: Sliders },
   properties: { component: PropertiesInspector, title: 'PROPERTIES', icon: Settings },
   tools: { component: Sidebar, title: 'TOOLS', icon: PenTool, noPadding: true },
-  timeline: { component: TimelinePanel, title: 'TIMELINE', icon: LayoutList, noPadding: true, collapsible: false },
+  timeline: { component: TimelinePanel, title: 'TIMELINE', icon: LayoutList, noPadding: true, collapsible: false, closable: false },
   notations: { component: NotationTabs, title: 'NOTATION & VIEWS', icon: Music, noPadding: true },
   plugins: { component: PluginTabs, title: 'PLUGINS', icon: Plug, noPadding: true },
 };
 
 function ZoneRenderer({ zoneId, direction = 'vertical' }) {
-  const { layout } = useLayout();
-  const panels = layout.zones[zoneId]?.panels || [];
+  const { layout, layoutDispatch } = useLayout();
+  // Filter panels by their visibility state before rendering
+  const panels = (layout.zones[zoneId]?.panels || []).filter(
+    (id) => layout.panelVisibility[id] !== false
+  );
 
   if (panels.length === 0) {
     return (
@@ -60,6 +63,9 @@ function ZoneRenderer({ zoneId, direction = 'vertical' }) {
                    icon={config.icon}
                    noPadding={config.noPadding}
                    collapsible={config.collapsible !== false}
+                   closable={config.closable !== false}
+                   sourceZone={zoneId}
+                   onClose={() => layoutDispatch({ type: 'SET_PANEL_VISIBILITY', payload: { panel: panelId, visible: false } })}
                  >
                    <Component />
                  </DockablePanel>
