@@ -1,74 +1,38 @@
 import React from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useApp } from './context/AppContext';
+import { useLayout } from './context/LayoutContext';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import AudioUploader from './components/AudioUploader';
 import WaveformViewer from './components/WaveformViewer';
 import PlaybackControls from './components/PlaybackControls';
-import SheetMusicViewer from './components/SheetMusicViewer';
-import TablatureViewer from './components/TablatureViewer';
-import PianoRollEditor from './components/PianoRollEditor';
-import SpectrogramViewer from './components/SpectrogramViewer';
-import LyricsViewer from './components/LyricsViewer';
-import StemMixer from './components/StemMixer';
-import VocalTuner from './components/VocalTuner';
 import NoteEditor from './components/NoteEditor';
 import MeasureEditingMode from './components/MeasureEditingMode';
 import ExportDialog from './components/ExportDialog';
 import OpenFileDialog from './components/OpenFileDialog';
 import SettingsDialog from './components/SettingsDialog';
-import { Music, Guitar, Piano, BarChart3, Type, LayoutList, Activity, Mic2 } from 'lucide-react';
-
-const viewTabs = [
-  { id: 'sheet', label: 'Sheet Music', icon: Music },
-  { id: 'tab', label: 'Tablature', icon: Guitar },
-  { id: 'piano', label: 'Piano Roll', icon: Piano },
-  { id: 'spectrogram', label: 'Spectrogram', icon: BarChart3 },
-  { id: 'lyrics', label: 'Lyrics', icon: Type },
-  { id: 'stems', label: 'Stems', icon: Activity },
-  { id: 'autotune', label: 'AutoTune', icon: Mic2 },
-];
+import ChannelStrip from './components/daw/ChannelStrip';
+import PropertiesInspector from './components/daw/PropertiesInspector';
+import PluginTabs from './components/daw/PluginTabs';
+import DockZone from './components/daw/DockZone';
+import { LayoutList } from 'lucide-react';
 
 export default function App() {
   const { state, dispatch } = useApp();
+  const { layout, layoutDispatch } = useLayout();
 
   // Sync Accent Color to CSS variables
   React.useEffect(() => {
     const root = document.documentElement;
     const accent = state.preferences.accentColor || '#7c5cfc';
     root.style.setProperty('--accent-primary', accent);
-    
-    // Compute subtle hover/glow variants based on the hex
-    // (A proper implementation would parse HSL, but this works for proof of concept)
-    root.style.setProperty('--accent-glow', `${accent}40`); // 25% opacity
-    root.style.setProperty('--border-hover', `${accent}66`); // 40% opacity
+    root.style.setProperty('--accent-glow', `${accent}40`);
+    root.style.setProperty('--border-hover', `${accent}66`);
   }, [state.preferences.accentColor]);
-
-  const renderMainContent = () => {
-    switch (state.viewMode) {
-      case 'sheet': return <SheetMusicViewer />;
-      case 'tab': return <TablatureViewer />;
-      case 'piano': return <PianoRollEditor />;
-      case 'spectrogram': return <SpectrogramViewer />;
-      case 'lyrics': return <LyricsViewer />;
-      case 'stems': return <StemMixer />;
-      case 'autotune': return <VocalTuner />;
-      default: return <SheetMusicViewer />;
-    }
-  };
-
-  const renderRightPanel = () => {
-    if (state.editMode === 'measure') {
-      return <MeasureEditingMode />;
-    }
-    return <NoteEditor />;
-  };
 
   // Handle file from OpenFileDialog
   const handleFileReady = async (file, settings) => {
-    // The AudioUploader's processFile logic is re-used here
-    // We dispatch the open dialog close and trigger file processing
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     try {
       const arrayBuffer = await file.arrayBuffer();
@@ -94,8 +58,8 @@ export default function App() {
         setTranscriptionManager(mgr);
 
         const result = await mgr.transcribe(
-          audioBuffer, 
-          state.sensitivity, 
+          audioBuffer,
+          state.sensitivity,
           state.preferences.advancedDSP,
           ({ progress, step }) => {
             dispatch({ type: 'UPDATE_TRANSCRIPTION_PROGRESS', payload: { progress, step } });
@@ -129,8 +93,15 @@ export default function App() {
     }
   };
 
+  const renderRightPanel = () => {
+    if (state.editMode === 'measure') {
+      return <MeasureEditingMode />;
+    }
+    return <NoteEditor />;
+  };
+
   return (
-    <div className="app-container">
+    <div className="app-container daw-layout">
       <Header />
 
       {!state.audioBuffer ? (
@@ -138,63 +109,88 @@ export default function App() {
           <AudioUploader />
         </div>
       ) : (
-        <div className="workspace" style={{ flex: 1 }}>
-          <PanelGroup direction="horizontal" autoSaveId="autoscore-layout">
-            {/* Sidebar */}
-            <Panel defaultSize={14} minSize={10} maxSize={25}>
-              <Sidebar />
+        <div className="workspace daw-workspace" style={{ flex: 1 }}>
+          <PanelGroup direction="horizontal" autoSaveId="daw-layout-h">
+            {/* ==== LEFT ZONE: Channels + Properties + Tools ==== */}
+            <Panel defaultSize={20} minSize={12} maxSize={30}>
+              <DockZone zone="left">
+                <PanelGroup direction="vertical" autoSaveId="daw-left-v">
+                  {/* Channel Strip */}
+                  <Panel defaultSize={40} minSize={20}>
+                    <div className="daw-panel-wrapper">
+                      <div className="daw-panel-label">
+                        <span>CHANNELS</span>
+                      </div>
+                      <div className="daw-panel-body">
+                        <ChannelStrip />
+                      </div>
+                    </div>
+                  </Panel>
+                  <PanelResizeHandle className="resize-handle-h" />
+
+                  {/* Properties Inspector */}
+                  <Panel defaultSize={35} minSize={15}>
+                    <div className="daw-panel-wrapper">
+                      <div className="daw-panel-label">
+                        <span>PROPERTIES</span>
+                      </div>
+                      <div className="daw-panel-body">
+                        <PropertiesInspector />
+                      </div>
+                    </div>
+                  </Panel>
+                  <PanelResizeHandle className="resize-handle-h" />
+
+                  {/* Tools */}
+                  <Panel defaultSize={25} minSize={15}>
+                    <div className="daw-panel-wrapper">
+                      <div className="daw-panel-label">
+                        <span>TOOLS</span>
+                      </div>
+                      <div className="daw-panel-body">
+                        <Sidebar />
+                      </div>
+                    </div>
+                  </Panel>
+                </PanelGroup>
+              </DockZone>
             </Panel>
-            <PanelResizeHandle className="resize-handle" />
+            <PanelResizeHandle className="resize-handle-v" />
 
-            {/* Main editor */}
-            <Panel defaultSize={62} minSize={40}>
-              <div className="main-panel">
-                {/* Tab bar */}
-                <div className="tab-bar">
-                  {viewTabs.map(tab => (
-                    <button
-                      key={tab.id}
-                      className={`tab ${state.viewMode === tab.id ? 'active' : ''}`}
-                      onClick={() => dispatch({ type: 'SET_VIEW_MODE', payload: tab.id })}
-                    >
-                      <tab.icon size={14} />
-                      {tab.label}
-                    </button>
-                  ))}
-
-                  {/* Edit mode indicator */}
-                  <div style={{
-                    marginLeft: 'auto',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 'var(--space-xs)',
-                    padding: '0 var(--space-md)',
-                    fontSize: 'var(--text-xs)',
-                    color: 'var(--text-tertiary)',
-                  }}>
-                    <LayoutList size={12} />
-                    {state.editMode === 'note' ? 'Note Mode' : 'Measure Mode'}
-                  </div>
-                </div>
-
-                {/* Waveform */}
-                <WaveformViewer />
-
-                {/* Notation / spectrogram area */}
-                <div className="notation-area">
-                  <div className="notation-canvas-wrapper">
-                    {renderMainContent()}
-                  </div>
-                </div>
-              </div>
+            {/* ==== CENTER ZONE: Timeline + Bottom Dock ==== */}
+            <Panel defaultSize={55} minSize={35}>
+              <DockZone zone="center">
+                <PanelGroup direction="vertical" autoSaveId="daw-center-v">
+                  {/* Main Timeline / Waveform */}
+                  <Panel defaultSize={100} minSize={40}>
+                    <div className="daw-panel-wrapper center-panel">
+                      <div className="daw-panel-label">
+                        <span>TIMELINE</span>
+                        <div className="timeline-mode-indicator">
+                          <LayoutList size={11} />
+                          <span>{state.editMode === 'note' ? 'Note Mode' : 'Measure Mode'}</span>
+                        </div>
+                      </div>
+                      <div className="daw-panel-body timeline-body">
+                        <WaveformViewer />
+                        <div className="timeline-content-area">
+                          {renderRightPanel()}
+                        </div>
+                      </div>
+                    </div>
+                  </Panel>
+                </PanelGroup>
+              </DockZone>
             </Panel>
-            <PanelResizeHandle className="resize-handle" />
+            <PanelResizeHandle className="resize-handle-v" />
 
-            {/* Right: Properties / Measure editing */}
-            <Panel defaultSize={24} minSize={16} maxSize={35}>
-              <div style={{ height: '100%', overflowY: 'auto' }}>
-                {renderRightPanel()}
-              </div>
+            {/* ==== RIGHT ZONE: Plugins + Sorted Tabs ==== */}
+            <Panel defaultSize={25} minSize={16} maxSize={40}>
+              <DockZone zone="right">
+                <div className="daw-panel-wrapper right-panel">
+                  <PluginTabs />
+                </div>
+              </DockZone>
             </Panel>
           </PanelGroup>
         </div>
