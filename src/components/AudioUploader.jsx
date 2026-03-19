@@ -5,6 +5,7 @@ import { useLayout } from '../context/LayoutContext';
 
 import { TranscriptionManager } from '../engine/TranscriptionManager';
 import { SpectrogramEngine } from '../engine/SpectrogramEngine';
+import { StemEngine } from '../engine/StemEngine';
 
 import { setTranscriptionManager } from './NoteEditor';
 
@@ -106,6 +107,26 @@ export default function AudioUploader() {
       // Auto-transcribe if processing mode is findNotes
       if (effectiveSettings.processingMode === 'findNotes') {
         dispatch({ type: 'START_TRANSCRIPTION' });
+        
+        // --- Stem Separation Integration ---
+        let processingBuffer = audioBuffer;
+        if (instId !== 'auto' && instId !== 'drums' && instId !== 'piano') {
+          dispatch({ type: 'UPDATE_TRANSCRIPTION_PROGRESS', payload: { progress: 5, step: 'Isolating instrument stems for accuracy...' } });
+          try {
+            const stemEngine = new StemEngine(audioCtx);
+            const stems = await stemEngine.separate(audioBuffer, (p) => {
+              dispatch({ type: 'UPDATE_TRANSCRIPTION_PROGRESS', payload: { progress: 5 + (p * 0.4), step: `Extracting ${instId} stem... ${Math.round(p)}%` } });
+            });
+            dispatch({ type: 'SET_STEMS', payload: stems });
+            
+            // Map instrument to stem
+            if (instId === 'bass') processingBuffer = stems.bass;
+            else if (instId === 'voice') processingBuffer = stems.vocals;
+            else if (instId === 'guitar' || instId === 'electric-guitar') processingBuffer = stems.other;
+          } catch (e) {
+            console.warn("Stem separation failed, falling back to full mix:", e);
+          }
+        }
 
         const mgr = new TranscriptionManager();
         transcriptionManager = mgr;
@@ -113,7 +134,7 @@ export default function AudioUploader() {
 
         try {
           const result = await mgr.transcribe(
-            audioBuffer,
+            processingBuffer,
             state.sensitivity,
             state.preferences.advancedDSP,
             ({ progress, step }) => {

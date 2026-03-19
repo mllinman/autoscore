@@ -53,6 +53,8 @@ const initialState = {
   candidateNotes: [], // lower confidence notes shown as hints
   beats: [],
   detectedTempo: DEFAULT_TEMPO,
+  detectedKey: null,
+  chords: [],
 
   // Spectrogram
   spectrogramData: null,
@@ -116,7 +118,9 @@ const initialState = {
   showOpenDialog: false,
   showSettings: false,
   showFileMenu: false,
-  activeTool: 'select', // 'select' | 'pencil' | 'eraser' | 'slice'
+  activeTool: 'select', // 'select' | 'pencil' | 'eraser' | 'slice' | 'notation'
+  notationDuration: 'quarter', // 'whole' | 'half' | 'quarter' | 'eighth' | 'sixteenth'
+  notationAccidental: null, // null | 'sharp' | 'flat' | 'natural'
 };
 
 function appReducer(state, action) {
@@ -210,6 +214,9 @@ function appReducer(state, action) {
         detectedTempo: action.payload.tempo,
         tempo: action.payload.tempo,
         measures: action.payload.measures,
+        detectedKey: action.payload.detectedKey || null,
+        chords: action.payload.chords || [],
+        keySignature: action.payload.detectedKey?.key || state.keySignature,
       };
 
     case 'SET_SPECTROGRAM_DATA':
@@ -387,6 +394,12 @@ function appReducer(state, action) {
 
     case 'SET_ACTIVE_TOOL':
       return { ...state, activeTool: action.payload };
+
+    case 'SET_NOTATION_DURATION':
+      return { ...state, notationDuration: action.payload, activeTool: 'notation' };
+
+    case 'SET_NOTATION_ACCIDENTAL':
+      return { ...state, notationAccidental: action.payload, activeTool: 'notation' };
 
     case 'SET_SCORE_TITLE':
       return { ...state, scoreTitle: action.payload };

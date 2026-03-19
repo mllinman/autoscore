@@ -76,7 +76,30 @@ export class BeatDetector {
         }
 
         const bestInterval = minInterval + maxIdx * resolution;
-        const bpm = Math.round(60 / bestInterval);
+        let bpm = Math.round(60 / bestInterval);
+
+        // --- Refined Tempo Selection ---
+        // Check for common half/double tempo errors if they have significant energy
+        const halfBpm = Math.round(bpm / 2);
+        const doubleBpm = Math.round(bpm * 2);
+
+        const checkEnergy = (b) => {
+          if (b < this.minBPM || b > this.maxBPM) return 0;
+          const idx = Math.floor(((60 / b) - minInterval) / resolution);
+          return smoothed[idx] || 0;
+        };
+
+        const currentEnergy = smoothed[maxIdx];
+        const halfEnergy = checkEnergy(halfBpm);
+        const doubleEnergy = checkEnergy(doubleBpm);
+
+        // If half or double BPM has > 80% of the maximum energy, prefer it based on musician heuristics
+        // (Musicians often prefer 80-140 BPM range)
+        if (halfEnergy > currentEnergy * 0.8 && halfBpm >= 60 && halfBpm <= 120) {
+          bpm = halfBpm;
+        } else if (doubleEnergy > currentEnergy * 0.8 && doubleBpm >= 80 && doubleBpm <= 140 && bpm < 70) {
+          bpm = doubleBpm;
+        }
 
         return Math.max(this.minBPM, Math.min(this.maxBPM, bpm));
     }

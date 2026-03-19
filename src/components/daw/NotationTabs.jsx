@@ -9,6 +9,8 @@ import PianoRollEditor from '../PianoRollEditor';
 import SpectrogramViewer from '../SpectrogramViewer';
 import LyricsViewer from '../LyricsViewer';
 
+import NotationWorkspace from './NotationWorkspace';
+
 const NOTATION_ICONS = {
   sheet: Music,
   tab: Guitar,
@@ -18,8 +20,8 @@ const NOTATION_ICONS = {
 };
 
 const VIEW_RENDERERS = {
-  sheet: () => <SheetMusicViewer />,
-  tab: () => <TablatureViewer />,
+  sheet: () => <NotationWorkspace><SheetMusicViewer /></NotationWorkspace>,
+  tab: () => <NotationWorkspace><TablatureViewer /></NotationWorkspace>,
   piano: () => <PianoRollEditor />,
   spectrogram: () => <SpectrogramViewer />,
   lyrics: () => <LyricsViewer />,
@@ -43,7 +45,7 @@ export default function NotationTabs() {
 
   return (
     <div className="notation-tabs-container" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div className="tab-strip" style={{ background: 'var(--daw-bg-mid)' }}>
+      <div className="tab-strip" style={{ background: 'var(--daw-bg-mid)', borderBottom: '1px solid var(--border-subtle)' }}>
         {layout.sortedTabs.map(tab => {
           const Icon = NOTATION_ICONS[tab.id] || Music;
           const isActive = layout.activeSortedTab === tab.id;
@@ -60,7 +62,7 @@ export default function NotationTabs() {
           );
         })}
       </div>
-      <div className="tab-content-area notation-area-bg" style={{ flex: 1, overflow: 'auto', background: 'var(--daw-bg-darkest)' }}>
+      <div className="tab-content-area" style={{ flex: 1, overflow: 'auto', background: 'var(--bg-primary)' }}>
         {renderContent()}
       </div>
     </div>

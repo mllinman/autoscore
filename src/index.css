@@ -139,9 +139,9 @@ body {
 
 /* ---------- Utility Classes ---------- */
 .glass {
-  background: var(--glass-bg);
-  backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow);
 }
@@ -171,6 +171,7 @@ body {
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-subtle);
   z-index: var(--z-dropdown);
+  -webkit-user-select: none;
   user-select: none;
 }
 
@@ -594,6 +595,131 @@ body {
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+/* ---------- Notation Editor Workspace (Noteflight Style) ---------- */
+.notation-workspace {
+  background: #f0f0f5;
+  height: 100%;
+  width: 100%;
+}
+
+.notation-toolbar {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-md);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  z-index: 10;
+}
+
+.notation-toolbar .btn-group {
+  display: flex;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin: 0 var(--space-xs);
+}
+
+.notation-toolbar .btn-group .btn {
+  border: none;
+  border-radius: 0;
+  border-right: 1px solid var(--border-subtle);
+  background: transparent;
+}
+
+.notation-toolbar .btn-group .btn:last-child {
+  border-right: none;
+}
+
+.notation-toolbar .btn.active {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.toolbar-separator {
+  width: 1px;
+  height: 20px;
+  background: var(--border-subtle);
+  margin: 0 var(--space-md);
+}
+
+.notation-sidebar {
+  background: var(--bg-primary);
+  border-right: 1px solid var(--border-subtle);
+  width: 180px;
+  overflow-y: auto;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.sidebar-item {
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.sidebar-item:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.sidebar-item.active {
+  color: var(--accent-primary);
+  background: rgba(124, 92, 252, 0.1);
+  font-weight: 600;
+}
+
+.notation-canvas-professional {
+  background: white;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+  margin: 20px auto;
+  display: block;
+}
+
+.notation-area-bg {
+  background: #e2e2e8 !important; /* Slightly darker desk background */
+}
+
+/* ---------- Waveform Aesthetics ---------- */
+.system-waveform-container {
+  margin-top: 20px;
+  opacity: 0.7;
+  transition: opacity 0.3s ease;
+}
+
+.system-waveform-container:hover {
+  opacity: 1;
+}
+
+/* ---------- Layout Fixes ---------- */
+.empty-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  border: 2px dashed var(--border-subtle);
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.resize-handle-v, .resize-handle-h {
+  background: var(--border-subtle);
+  transition: background 0.2s;
+}
+
+.resize-handle-v:hover, .resize-handle-h:hover {
+  background: var(--accent-primary);
 }
 
 /* ---------- Notation Area ---------- */

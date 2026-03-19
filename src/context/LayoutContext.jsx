@@ -212,6 +212,10 @@ export function LayoutProvider({ children }) {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
+        // Ensure unique panels in zones to prevent duplication issues
+        Object.keys(parsed.zones).forEach(z => {
+          parsed.zones[z].panels = [...new Set(parsed.zones[z].panels)];
+        });
         return { ...initial, ...parsed };
       }
     } catch (e) {

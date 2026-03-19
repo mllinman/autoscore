@@ -2,6 +2,7 @@ import { PitchDetector } from './PitchDetector';
 import { OnsetDetector } from './OnsetDetector';
 import { BeatDetector } from './BeatDetector';
 import { NoteQuantizer } from './NoteQuantizer';
+import { MusicAnalyzer } from './MusicAnalyzer';
 
 self.onmessage = async function(e) {
   const { type, payload } = e.data;
@@ -28,6 +29,7 @@ self.onmessage = async function(e) {
     const onsetDetector = new OnsetDetector(sampleRate);
     const beatDetector = new BeatDetector(sampleRate);
     const noteQuantizer = new NoteQuantizer();
+    const musicAnalyzer = new MusicAnalyzer();
 
     const reportProgress = (progress, step) => {
       self.postMessage({ type: 'PROGRESS', payload: { progress, step } });
@@ -56,6 +58,11 @@ self.onmessage = async function(e) {
 
       reportProgress(87, 'Quantizing notes...');
       const notes = noteQuantizer.quantize(pitchData, onsets, beats, tempo, sensitivity);
+      
+      reportProgress(92, 'Analyzing key and chords...');
+      const detectedKey = musicAnalyzer.detectKey(notes);
+      const chords = musicAnalyzer.identifyChords(notes);
+      
       reportProgress(95, 'Building score...');
 
       // Generate measures
@@ -87,6 +94,8 @@ self.onmessage = async function(e) {
           measures,
           pitchData,
           onsets,
+          detectedKey,
+          chords,
         }
       });
 
