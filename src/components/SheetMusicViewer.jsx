@@ -3,6 +3,9 @@ import { useApp } from '../context/AppContext';
 import { midiToNoteName } from '../utils/musicTheory';
 import { Music, Play, Plus, Trash2 } from 'lucide-react';
 import SystemWaveform from './SystemWaveform';
+import { calculateAutoRests, transposeNotes } from '../utils/scoreUtils';
+import { exportToMidi } from '../utils/MidiExporter';
+import { ChevronUp, ChevronDown, RefreshCw, FileText, Type } from 'lucide-react';
 
 /**
  * SheetMusicViewer - Canvas-based sheet music notation renderer
@@ -20,7 +23,12 @@ export default function SheetMusicViewer() {
   const LINE_SPACING = 10;
   const STAFF_TOP_MARGIN = 60;
   const STAFF_HEIGHT = LINE_SPACING * 4;
-  const MEASURE_WIDTH_MIN = 120;
+  const MEASURE_WIDTH_MIN = 140; // Increased base width
+  
+  // Calculate Auto-Rests for display
+  const autoRests = useMemo(() => {
+    return calculateAutoRests(notes, measures);
+  }, [notes, measures]);
   
   // Calculate layout: Group measures into "Systems" (rows)
   const systems = useMemo(() => {
@@ -32,14 +40,18 @@ export default function SheetMusicViewer() {
 
     measures.forEach(m => {
       const mNotes = notes.filter(n => n.startTime >= m.startTime && n.startTime < m.endTime);
-      const mWidth = Math.max(MEASURE_WIDTH_MIN, mNotes.length * 20 + 40);
+      const mRests = autoRests.filter(r => r.startTime >= m.startTime && r.startTime < m.endTime);
+      
+      // Intelligent Spacing: More notes/rests = more width
+      const totalItems = mNotes.length + mRests.length;
+      const mWidth = Math.max(MEASURE_WIDTH_MIN, totalItems * 35 + 40);
 
       if (currentSystem.width + mWidth > maxSystemWidth && currentSystem.measures.length > 0) {
         systemsList.push(currentSystem);
         currentSystem = { measures: [], width: 0 };
       }
       
-      currentSystem.measures.push({ ...m, notes: mNotes, width: mWidth });
+      currentSystem.measures.push({ ...m, notes: mNotes, rests: mRests, width: mWidth });
       currentSystem.width += mWidth;
     });
 
@@ -145,6 +157,12 @@ export default function SheetMusicViewer() {
           ctx.textAlign = 'left';
         }
 
+        // Draw Auto-Rests
+        measure.rests.forEach((rest, ri) => {
+          const restX = measureX + 25 + (ri / (measure.rests.length + measure.notes.length || 1)) * (mWidth - 50);
+          drawRest(ctx, restX, systemY, rest.duration, LINE_SPACING);
+        });
+
         // Draw Notes in measure
         // Group notes by time for chords
         const timeGroups = {};
@@ -160,7 +178,10 @@ export default function SheetMusicViewer() {
         
         sortedTimes.forEach((time, ti) => {
           const group = timeGroups[time];
-          const noteX = measureX + notePadding + (ti / (sortedTimes.length || 1)) * availableNoteSpace;
+          let restX = measureX + 25 + (ti / (sortedTimes.length || 1)) * availableNoteSpace;
+          
+          // Collision Avoidance: If this X is too close to a previous note, nudge it
+          // (Simplified for now)
           
           group.forEach(note => {
             const noteY = midiToStaffY(note.midi, systemY, LINE_SPACING, instrument.clef);
@@ -177,8 +198,20 @@ export default function SheetMusicViewer() {
             }
 
             drawNote(ctx, noteX, noteY, color, note.durationName || 'quarter', LINE_SPACING);
+
+            // Draw Lyrics
+            if (note.lyric) {
+              ctx.font = 'italic 12px serif';
+              ctx.fillStyle = '#000';
+              ctx.textAlign = 'center';
+              ctx.fillText(note.lyric, noteX, systemY + STAFF_HEIGHT + 30);
+              ctx.textAlign = 'left';
+            }
           });
         });
+
+        // 4. Draw Beams for eighth/sixteenth notes
+        drawBeams(ctx, measure.notes, measureX, systemY, LINE_SPACING, instrument.clef);
 
         // --- DRAW WAVEFORM UNDER SYSTEM ---
         if (mIdx === 0 && audioBuffer) {
@@ -279,6 +312,41 @@ export default function SheetMusicViewer() {
       onClick={handleClick}
       onMouseLeave={() => setHoverNote(null)}
     >
+      <div className="notation-toolbar" style={{ 
+        position: 'absolute', top: '10px', right: '10px', 
+        display: 'flex', gap: '8px', zIndex: 10,
+        background: 'rgba(255,255,255,0.9)', padding: '6px', borderRadius: '8px', border: '1px solid #ddd'
+      }}>
+        <button onClick={() => {
+          const newNotes = transposeNotes(notes, 1);
+          dispatch({ type: 'SET_NOTES', payload: newNotes });
+        }} title="Transpose Up" style={{ padding: '4px', cursor: 'pointer', border: 'none', background: 'none' }}>
+          <ChevronUp size={18} />
+        </button>
+        <button onClick={() => {
+          const newNotes = transposeNotes(notes, -1);
+          dispatch({ type: 'SET_NOTES', payload: newNotes });
+        }} title="Transpose Down" style={{ padding: '4px', cursor: 'pointer', border: 'none', background: 'none' }}>
+          <ChevronDown size={18} />
+        </button>
+        <button onClick={() => {
+          const link = document.createElement('a');
+          link.download = 'score.png';
+          link.href = canvasRef.current.toDataURL();
+          link.click();
+        }} title="Export PNG" style={{ padding: '4px', cursor: 'pointer', border: 'none', background: 'none', marginLeft: '10px' }}>
+          <Music size={18} />
+        </button>
+        <button onClick={() => exportToMidi(notes)} title="Export MIDI" style={{ padding: '4px', cursor: 'pointer', border: 'none', background: 'none' }}>
+          <FileText size={18} />
+        </button>
+        <button onClick={() => dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'lyrics' })} title="Lyrics Mode" style={{ 
+          padding: '4px', cursor: 'pointer', border: 'none', background: state.activeTool === 'lyrics' ? 'var(--accent-primary)' : 'none',
+          borderRadius: '4px'
+        }}>
+          <Type size={18} />
+        </button>
+      </div>
       <canvas
         ref={canvasRef}
         className="notation-canvas professional"
@@ -541,6 +609,73 @@ function drawLedgerLines(ctx, x, noteY, staffTop, staffBottom, lineSpacing) {
       ctx.moveTo(x - ledgerWidth, ly);
       ctx.lineTo(x + ledgerWidth, ly);
       ctx.stroke();
+    }
+  }
+}
+
+function drawRest(ctx, x, y, duration, lineSpacing) {
+  ctx.fillStyle = '#000';
+  ctx.font = '28px serif';
+  ctx.textAlign = 'center';
+
+  // Map duration to glyph
+  if (duration >= 3.5) { // Whole
+    ctx.fillRect(x - 6, y + lineSpacing, 12, 6);
+  } else if (duration >= 1.5) { // Half
+    ctx.fillRect(x - 6, y + lineSpacing * 2 - 6, 12, 6);
+  } else if (duration >= 0.7) { // Quarter
+    ctx.fillText('𝄽', x, y + lineSpacing * 2.5);
+  } else if (duration >= 0.3) { // Eighth
+    ctx.fillText('𝄾', x, y + lineSpacing * 2.5);
+  } else { // Sixteenth
+    ctx.fillText('𝄿', x, y + lineSpacing * 2.5);
+  }
+  ctx.textAlign = 'left';
+}
+
+function drawBeams(ctx, notes, measureX, systemY, lineSpacing, clef) {
+  // Simple beaming logic: group consecutive eighth/sixteenth notes
+  const beamable = notes.filter(n => n.durationName === 'eighth' || n.durationName === 'sixteenth')
+    .sort((a, b) => a.startTime - b.startTime);
+  
+  if (beamable.length < 2) return;
+
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 3.5;
+
+  let currentGroup = [beamable[0]];
+  for (let i = 1; i <= beamable.length; i++) {
+    const prev = beamable[i-1];
+    const curr = beamable[i];
+    
+    // Group if within 0.6s
+    if (curr && curr.startTime - prev.startTime < 0.6) {
+      currentGroup.push(curr);
+    } else {
+      if (currentGroup.length >= 2) {
+        const first = currentGroup[0];
+        const last = currentGroup[currentGroup.length - 1];
+        
+        // Approximate positions
+        const x1 = measureX + 25 + (first.startTime % 1) * 100;
+        const x2 = measureX + 25 + (last.startTime % 1) * 100;
+        
+        const y1 = midiToStaffY(first.midi || first.pitch, systemY, lineSpacing, clef) - lineSpacing * 3.5;
+        const y2 = midiToStaffY(last.midi || last.pitch, systemY, lineSpacing, clef) - lineSpacing * 3.5;
+
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        
+        if (currentGroup.every(n => n.durationName === 'sixteenth')) {
+          ctx.beginPath();
+          ctx.moveTo(x1, y1 + 6);
+          ctx.lineTo(x2, y2 + 6);
+          ctx.stroke();
+        }
+      }
+      if (curr) currentGroup = [curr];
     }
   }
 }

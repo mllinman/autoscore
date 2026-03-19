@@ -64,7 +64,13 @@ export default function PlaybackControls() {
 
       const noteStart = Math.max(0, note.startTime - offset);
       const noteEnd = Math.max(0, note.endTime - offset);
-      const noteDuration = noteEnd - noteStart;
+      let noteDuration = noteEnd - noteStart;
+
+      // --- ADVANCED PLAYBACK: Articulations ---
+      let peakVolume = 0.4;
+      if (note.articulation === 'accent') peakVolume *= 1.5;
+      if (note.articulation === 'staccato') noteDuration *= 0.4; // Shorten for staccato
+      
       if (noteDuration <= 0) continue;
 
       const osc = audioCtx.createOscillator();
@@ -78,11 +84,15 @@ export default function PlaybackControls() {
       const decayTime = 0.1;
       const sustainLevel = 0.15;
       const releaseTime = 0.15;
-      const peakVolume = 0.4;
 
-      const startTimeScaled = audioCtx.currentTime + noteStart / playbackRate;
-      const endTimeScaled = audioCtx.currentTime + noteEnd / playbackRate;
-      const durationScaled = endTimeScaled - startTimeScaled;
+      // --- ADVANCED PLAYBACK: Swing & Humanization ---
+      const swingFactor = 0.15; // Customizable later
+      const isOffbeat = (Math.round(note.startTime * 4) % 2) !== 0; // Simplified eighth-note swing check
+      const swingOffset = isOffbeat ? swingFactor * (1/4) : 0;
+      const humanizeOffset = (Math.random() - 0.5) * 0.005; // +/- 2.5ms jitter
+
+      const startTimeScaled = audioCtx.currentTime + (noteStart + swingOffset + humanizeOffset) / playbackRate;
+      const endTimeScaled = startTimeScaled + noteDuration / playbackRate;
 
       noteGain.gain.setValueAtTime(0, startTimeScaled);
       

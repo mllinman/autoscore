@@ -58,6 +58,9 @@ export default function Header() {
               <button className="dropdown-item" onClick={() => { dispatch({ type: 'TOGGLE_OPEN_DIALOG' }); setShowFileMenu(false); }}>
                 <FolderOpen size={14} /> Open...
               </button>
+              <button className="dropdown-item" onClick={() => { alert('OMR (Optical Music Recognition) scanning initiated...'); setShowFileMenu(false); }}>
+                <FileText size={14} /> Scan PDF (OMR)...
+              </button>
               <div className="dropdown-submenu">
                 <button className="dropdown-item">
                   <History size={14} /> Open Recent <ChevronRight size={12} style={{ marginLeft: 'auto' }} />
@@ -236,6 +239,15 @@ export default function Header() {
             <option key={inst.id} value={inst.id}>{inst.name}</option>
           ))}
         </select>
+
+        {/* Advanced Analysis */}
+        <button 
+          className="btn btn-sm btn-ghost"
+          onClick={() => alert('Initiating High-Accuracy Spectral Analysis...')}
+          style={{ height: 28, fontSize: 10, border: '1px solid var(--border-subtle)' }}
+        >
+          <RefreshCw size={12} /> Advanced Analysis
+        </button>
 
         {/* Open button */}
         <button

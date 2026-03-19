@@ -133,6 +133,14 @@ const initialState = {
   activeTool: 'select', // 'select' | 'pencil' | 'eraser' | 'slice' | 'notation'
   notationDuration: 'quarter', // 'whole' | 'half' | 'quarter' | 'eighth' | 'sixteenth'
   notationAccidental: null, // null | 'sharp' | 'flat' | 'natural'
+  
+  // MIDI & Recording
+  midiEnabled: false,
+  isRecording: false,
+  midiNotes: [], // Live captured MIDI notes during recording
+  recordingStartTime: 0,
+  stepInputMode: false,
+  virtualInstrument: 'piano', // 'piano' | 'fretboard' | 'drums'
 };
 
 function appReducer(state, action) {
@@ -415,6 +423,26 @@ function appReducer(state, action) {
 
     case 'SET_SCORE_TITLE':
       return { ...state, scoreTitle: action.payload };
+
+    case 'SET_MIDI_ENABLED':
+      return { ...state, midiEnabled: action.payload };
+
+    case 'SET_RECORDING':
+      return { 
+        ...state, 
+        isRecording: action.payload,
+        recordingStartTime: action.payload ? performance.now() : 0,
+        midiNotes: action.payload ? [] : state.midiNotes
+      };
+
+    case 'SET_STEP_INPUT_MODE':
+      return { ...state, stepInputMode: action.payload };
+
+    case 'SET_VIRTUAL_INSTRUMENT':
+      return { ...state, virtualInstrument: action.payload };
+
+    case 'APPEND_MIDI_NOTE':
+      return { ...state, midiNotes: [...state.midiNotes, action.payload] };
 
     case 'RESET_PROJECT':
       return {

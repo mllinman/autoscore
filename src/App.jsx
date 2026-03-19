@@ -18,8 +18,12 @@ import DockZone from './components/daw/DockZone';
 import DockablePanel from './components/daw/DockablePanel';
 import TimelinePanel from './components/daw/TimelinePanel';
 import NotationTabs from './components/daw/NotationTabs';
+import VirtualFretboard from './components/daw/VirtualFretboard';
+import DrumPad from './components/daw/DrumPad';
 
-import { Menu, Sliders, Settings, PenTool, LayoutList, Music, Plug } from 'lucide-react';
+import { Menu, Sliders, Settings, PenTool, LayoutList, Music, Plug, Mic, Radio } from 'lucide-react';
+import { MidiManager } from './engine/MidiManager';
+import { AutoSaveManager } from './engine/AutoSaveManager';
 
 const PANEL_CONFIG = {
   header: { component: Header, title: 'MAIN MENU', icon: Menu, noPadding: true, collapsible: false, closable: false },
@@ -29,6 +33,8 @@ const PANEL_CONFIG = {
   timeline: { component: TimelinePanel, title: 'TIMELINE', icon: LayoutList, noPadding: true, collapsible: false, closable: false },
   notations: { component: NotationTabs, title: 'NOTATION & VIEWS', icon: Music, noPadding: true },
   plugins: { component: PluginTabs, title: 'PLUGINS', icon: Plug, noPadding: true },
+  fretboard: { component: VirtualFretboard, title: 'VIRTUAL FRETBOARD', icon: Music },
+  drumpad: { component: DrumPad, title: 'DRUM PAD', icon: Radio },
 };
 
 function ZoneRenderer({ zoneId, direction = 'vertical' }) {
@@ -81,6 +87,46 @@ function ZoneRenderer({ zoneId, direction = 'vertical' }) {
 export default function App() {
   const { state, dispatch } = useApp();
   const { layout, layoutDispatch } = useLayout();
+  const midiManagerRef = React.useRef(null);
+
+  // Initialize MIDI
+  useEffect(() => {
+    const initMidi = async () => {
+      const mgr = new MidiManager(
+        (note) => {
+          // Note On
+          if (state.isRecording) {
+            dispatch({ type: 'APPEND_MIDI_NOTE', payload: { ...note, type: 'on' } });
+          }
+          if (state.stepInputMode) {
+            // Step Entry logic would go here
+            console.log('Step In:', note.pitch);
+          }
+        },
+        (note) => {
+          // Note Off
+          if (state.isRecording) {
+            dispatch({ type: 'APPEND_MIDI_NOTE', payload: { ...note, type: 'off' } });
+          }
+        }
+      );
+      const success = await mgr.initialize();
+      if (success) {
+        midiManagerRef.current = mgr;
+        dispatch({ type: 'SET_MIDI_ENABLED', payload: true });
+      }
+    };
+    initMidi();
+  }, [state.isRecording, state.stepInputMode, dispatch]);
+
+  // Initialize Auto-Save
+  useEffect(() => {
+    const autoSaver = new AutoSaveManager();
+    autoSaver.start(() => {
+      autoSaver.saveToLocal(state);
+    });
+    return () => autoSaver.stop();
+  }, [state]);
 
   // Sync Accent Color to CSS variables
   useEffect(() => {
