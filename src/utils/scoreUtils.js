@@ -2,9 +2,11 @@
  * Transposes a list of notes by a number of semitones.
  */
 export const transposeNotes = (notes, semitones) => {
+  if (!notes) return [];
   return notes.map(note => ({
     ...note,
-    pitch: note.pitch + semitones
+    midi: (note.midi || note.pitch) + semitones,
+    pitch: (note.pitch || note.midi) + semitones
   }));
 };
 
@@ -13,6 +15,7 @@ export const transposeNotes = (notes, semitones) => {
  * This is a simplified version for visualization.
  */
 export const calculateAutoRests = (notes, measures) => {
+  if (!notes || !measures) return [];
   const rests = [];
   measures.forEach(m => {
     let lastEndTime = m.startTime;

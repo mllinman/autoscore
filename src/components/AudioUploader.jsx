@@ -117,12 +117,14 @@ export default function AudioUploader() {
             const stems = await stemEngine.separate(audioBuffer, (p) => {
               dispatch({ type: 'UPDATE_TRANSCRIPTION_PROGRESS', payload: { progress: 5 + (p * 0.4), step: `Extracting ${instId} stem... ${Math.round(p)}%` } });
             });
-            dispatch({ type: 'SET_STEMS', payload: stems });
+            if (stems) {
+              dispatch({ type: 'SET_STEMS', payload: stems });
             
-            // Map instrument to stem
-            if (instId === 'bass') processingBuffer = stems.bass;
-            else if (instId === 'voice') processingBuffer = stems.vocals;
-            else if (instId === 'guitar' || instId === 'electric-guitar') processingBuffer = stems.other;
+              // Map instrument to stem with fallback
+              if (instId === 'bass' && stems.bass) processingBuffer = stems.bass;
+              else if (instId === 'voice' && stems.vocals) processingBuffer = stems.vocals;
+              else if ((instId === 'guitar' || instId === 'electric-guitar') && stems.other) processingBuffer = stems.other;
+            }
           } catch (e) {
             console.warn("Stem separation failed, falling back to full mix:", e);
           }

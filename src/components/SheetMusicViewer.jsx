@@ -178,7 +178,7 @@ export default function SheetMusicViewer() {
         
         sortedTimes.forEach((time, ti) => {
           const group = timeGroups[time];
-          let restX = measureX + 25 + (ti / (sortedTimes.length || 1)) * availableNoteSpace;
+          const noteX = measureX + 25 + (ti / (sortedTimes.length || 1)) * availableNoteSpace;
           
           // Collision Avoidance: If this X is too close to a previous note, nudge it
           // (Simplified for now)
@@ -561,6 +561,7 @@ function drawAccidental(ctx, x, y, type, lineSpacing) {
  * Map MIDI note to Y position on the staff
  */
 function midiToStaffY(midi, staffTop, lineSpacing, clef) {
+  if (typeof midi !== 'number' || isNaN(midi)) return staffTop + lineSpacing * 2;
   const notePositions = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6]; 
   const octave = Math.floor(midi / 12) - 1;
   const noteInOctave = midi % 12;
