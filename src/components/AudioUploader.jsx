@@ -1,9 +1,16 @@
 import React, { useCallback, useRef, useState } from 'react';
+
 import { useApp } from '../context/AppContext';
+import { useLayout } from '../context/LayoutContext';
+
 import { TranscriptionManager } from '../engine/TranscriptionManager';
 import { SpectrogramEngine } from '../engine/SpectrogramEngine';
+
 import { setTranscriptionManager } from './NoteEditor';
-import { midiToNoteName } from '../utils/musicTheory';
+
+import { midiToNoteName, calculateGuitarFingering } from '../utils/musicTheory';
+import { INSTRUMENTS } from '../utils/constants';
+
 import { Upload, Sparkles, Music, Guitar, Zap, FileAudio, Piano, Edit3, Play, Mic, Download, Type, Users, Settings, Plus, Check } from 'lucide-react';
 
 const SUPPORTED_AUDIO = ['audio/wav', 'audio/mpeg', 'audio/mp3', 'audio/flac', 'audio/ogg',
@@ -15,6 +22,7 @@ export let transcriptionManager = null;
 
 export default function AudioUploader() {
   const { state, dispatch, getAudioContext } = useApp();
+  const { layoutDispatch } = useLayout();
   const fileInputRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   
@@ -69,13 +77,31 @@ export default function AudioUploader() {
         },
       });
 
-      // Phase 13: Auto-Routing
-      if (createTab && ['guitar_acoustic', 'guitar_electric', 'bass'].includes(selectedInstrument)) {
-        dispatch({ type: 'SET_VIEW_MODE', payload: 'tab' });
-      } else {
-        // Explicitly set it back to sheet just in case
-        dispatch({ type: 'SET_VIEW_MODE', payload: 'sheet' });
+      // Map the landing page select values to actual INSTRUMENTS IDs
+      let instId = selectedInstrument;
+      if (instId === 'guitar_acoustic') instId = 'guitar';
+      if (instId === 'guitar_electric') instId = 'electric-guitar';
+      if (instId === 'vocals') instId = 'voice';
+
+      let targetTab = 'sheet';
+
+      // Set the Instrument if user selected one
+      if (instId !== 'auto') {
+        const inst = INSTRUMENTS.find(i => i.id === instId);
+        if (inst) {
+          dispatch({ type: 'SET_INSTRUMENT', payload: inst });
+          if (createTab && inst.useTab) targetTab = 'tab';
+        }
+      } else if (createTab) {
+        // If auto-detect but user checked "Create Tablature", force it to guitar
+        const inst = INSTRUMENTS.find(i => i.id === 'guitar');
+        if (inst) {
+          dispatch({ type: 'SET_INSTRUMENT', payload: inst });
+          targetTab = 'tab';
+        }
       }
+
+      dispatch({ type: 'SET_VIEW_MODE', payload: targetTab });
 
       // Auto-transcribe if processing mode is findNotes
       if (effectiveSettings.processingMode === 'findNotes') {
@@ -89,6 +115,7 @@ export default function AudioUploader() {
           const result = await mgr.transcribe(
             audioBuffer,
             state.sensitivity,
+            state.preferences.advancedDSP,
             ({ progress, step }) => {
               dispatch({ type: 'UPDATE_TRANSCRIPTION_PROGRESS', payload: { progress, step } });
             }
@@ -108,9 +135,13 @@ export default function AudioUploader() {
               measures: result.measures,
             },
           });
+
+          // Show Notation panel dynamically
+          layoutDispatch({ type: 'SET_ACTIVE_SORTED_TAB', payload: targetTab });
         } catch (err) {
           console.error('Transcription failed:', err);
           dispatch({ type: 'SET_TRANSCRIPTION_RESULT', payload: { notes: [], candidateNotes: [], beats: [], tempo: 120, timeSignature: { num: 4, den: 4 }, measures: [] } });
+          alert('Transcription failed: DataCloneError or worker crash. Fallback empty transcription activated.');
         }
       }
 
