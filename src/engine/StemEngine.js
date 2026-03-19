@@ -1,162 +1,143 @@
+import { DSPUtils } from './DSPUtils';
+
 /**
- * StemEngine - Extremely lightweight DSP stem separator for Browsers
+ * StemEngine - Advanced Spectral Stem Separator
  * 
- * Uses a combination of Mid/Side processing, multi-band crossovers,
- * and transient detection to approximate 4 stems:
- * 1. Vocals (Mid channel, bandpassed)
- * 2. Bass (Mid channel, lowpassed)
- * 3. Drums (Transient bursts across spectrum)
- * 4. Other/Inst (Side channels + residual)
+ * Uses state-of-the-art DSP techniques:
+ * 1. STFT (Short-Time Fourier Transform)
+ * 2. Harmonic/Percussive Separation (HPS) via Median Filtering
+ * 3. Azimuth (Panning) Analysis for center/side isolation
+ * 4. Spectral Masking and Wiener Filtering reconstructs 4 stems.
  */
 export class StemEngine {
   constructor(audioContext) {
     this.ctx = audioContext;
+    this.FFT_SIZE = 2048;
+    this.HOP_SIZE = 512;
   }
 
   /**
-   * Processes a source AudioBuffer and returns an object of 4 new AudioBuffers
-   * @param {AudioBuffer} buffer The source stereo buffer
-   * @param {Function} onProgress Callback for processing updates (0-100)
-   * @returns {Promise<Object>} { vocals: AudioBuffer, bass: AudioBuffer, drums: AudioBuffer, other: AudioBuffer }
+   * Separates audio into 4 stems: Vocals, Drums, Bass, Other
    */
   async separate(buffer, onProgress = () => {}) {
-    onProgress(10);
-    // Offline rendered processing to avoid web audio node graph latency / real-time drops
-    const offlineCtx = new OfflineAudioContext(
-      buffer.numberOfChannels,
-      buffer.length,
-      buffer.sampleRate
-    );
-
-    // If mono, separation via M/S is impossible. We fake it by returning the buffer 4 times
-    if (buffer.numberOfChannels === 1) {
-      console.warn("StemEngine: Mono file detected. Mid/Side separation requires stereo. Returning copies.");
-      onProgress(100);
-      return { vocals: buffer, bass: buffer, drums: buffer, other: buffer };
-    }
-
-    onProgress(20);
-    
-    // We do the math manually on Float32Arrays for speed and precision
-    const leftBuffer = buffer.getChannelData(0);
-    const rightBuffer = buffer.getChannelData(1);
+    onProgress(5);
     const length = buffer.length;
     const sampleRate = buffer.sampleRate;
+    let leftChannel = buffer.getChannelData(0);
+    let rightChannel = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : new Float32Array(leftChannel);
 
-    // Create target arrays
-    const midArr = new Float32Array(length);
-    const sideArr = new Float32Array(length);
-    const bassArr = new Float32Array(length);
-    const drumMasterArr = new Float32Array(length);
+    // 1. Convert to Frequency Domain (STFT)
+    onProgress(10);
+    const stftL = DSPUtils.stft(leftChannel, this.FFT_SIZE, this.HOP_SIZE);
+    const stftR = DSPUtils.stft(rightChannel, this.FFT_SIZE, this.HOP_SIZE);
+    const numFrames = stftL.length;
+    const numBins = this.FFT_SIZE;
 
-    onProgress(30);
+    // 2. Magnitude Spectrograms
+    onProgress(20);
+    const magL = stftL.map(f => f.re.map((r, i) => Math.sqrt(r * r + f.im[i] * f.im[i])));
+    const magR = stftR.map(f => f.re.map((r, i) => Math.sqrt(r * r + f.im[i] * f.im[i])));
+    
+    // Average Magnitude for HPS
+    const magAvg = magL.map((f, i) => f.map((m, j) => (m + magR[i][j]) * 0.5));
 
-    // 1. Mid/Side Matrixing
-    for (let i = 0; i < length; i++) {
-      const l = leftBuffer[i];
-      const r = rightBuffer[i];
-      // Mid = (L + R) / 2
-      const m = (l + r) * 0.5;
-      midArr[i] = m;
-      // Side = (L - R) / 2
-      sideArr[i] = (l - r) * 0.5;
-    }
+    // 3. Harmonic/Percussive Separation (HPS)
+    onProgress(35);
+    // Median filter across time (Horizontal) -> Harmonic
+    const harmonicRes = DSPUtils.medianFilter2D(magAvg, numFrames, numBins, 17, true);
+    // Median filter across frequency (Vertical) -> Percussive
+    const percussiveRes = DSPUtils.medianFilter2D(magAvg, numFrames, numBins, 17, false);
 
-    onProgress(40);
-
-    // 2. Simple IIR Lo-pass for Bass (< 250Hz)
-    // Very basic 1-pole filter math for speed
-    let lpVal = 0;
-    const fLo = 250;
-    const rcLo = 1.0 / (fLo * 2 * Math.PI);
-    const dt = 1.0 / sampleRate;
-    const alphaLo = dt / (rcLo + dt);
-
-    for (let i = 0; i < length; i++) {
-      lpVal += (alphaLo * (midArr[i] - lpVal));
-      bassArr[i] = lpVal;
-    }
-
+    // 4. Azimuth (Panning) Analysis
     onProgress(50);
+    const pannedCenterMask = magAvg.map((f, fr) => f.map((m, b) => {
+        if (m === 0) return 0;
+        const diff = Math.abs(magL[fr][b] - magR[fr][b]);
+        const sum = magL[fr][b] + magR[fr][b];
+        // High similarity (low diff relative to sum) means center panned
+        return Math.max(0, 1.0 - (diff / (sum + 1e-6)) * 2.0);
+    }));
 
-    // 3. Simple High-pass for Vocals (> 150Hz) applied to Mid, minus the Bass
-    const vocalArr = new Float32Array(length);
-    for (let i = 0; i < length; i++) {
-        // Vocal is roughly the Mid channel, subtracting the deep bass so it doesn't rumble
-        vocalArr[i] = midArr[i] - bassArr[i];
+    // 5. Build Stem Masks
+    onProgress(65);
+    const vocalMask = [];
+    const drumMask = [];
+    const bassMask = [];
+    const otherMask = [];
+
+    const minFreqVocal = 150 * this.FFT_SIZE / sampleRate;
+    const maxFreqVocal = 12000 * this.FFT_SIZE / sampleRate;
+    const maxFreqBass = 300 * this.FFT_SIZE / sampleRate;
+
+    for (let f = 0; f < numFrames; f++) {
+        vocalMask[f] = new Float32Array(numBins);
+        drumMask[f] = new Float32Array(numBins);
+        bassMask[f] = new Float32Array(numBins);
+        otherMask[f] = new Float32Array(numBins);
+
+        for (let b = 0; b < numBins; b++) {
+            const h = harmonicRes[f][b];
+            const p = percussiveRes[f][b];
+            const center = pannedCenterMask[f][b];
+            const total = h + p + 1e-10;
+
+            // Ratio-based soft masks (Wiener style)
+            const hRatio = h / total;
+            const pRatio = p / total;
+
+            // DRUMS are primarily Percussive
+            drumMask[f][b] = pRatio;
+
+            // VOCALS are Harmonic, Centered, and in vocal range
+            if (b > minFreqVocal && b < maxFreqVocal) {
+                vocalMask[f][b] = hRatio * center * 0.9;
+            }
+
+            // BASS is Harmonic, Centered, and Low Freq
+            if (b < maxFreqBass) {
+                bassMask[f][b] = hRatio * center * 0.95;
+                // Reduce vocal bleed in bass
+                vocalMask[f][b] *= 0.1;
+            }
+
+            // OTHER is Harmonic, Wide, or Residual
+            otherMask[f][b] = hRatio * (1.0 - center) + (hRatio * center * 0.1);
+        }
     }
 
-    onProgress(60);
-
-    // 4. Transient Detection for Drums
-    // We run an energy tracker and look for spikes
-    let energy = 0;
-    const energyAlpha = 0.005; // Smoothing
-    let prevEnergy = 0;
-
-    for (let i = 0; i < length; i++) {
-      const sample = Math.abs(midArr[i]);
-      energy = (energyAlpha * sample) + ((1 - energyAlpha) * energy);
-      
-      const delta = energy - prevEnergy;
-      
-      // If energy spikes fast, it's a transient (drum)
-      if (delta > 0.05) { 
-        drumMasterArr[i] = midArr[i]; // Keep transient
-        // Duck the vocal/bass where the drum hit is huge
-        vocalArr[i] *= 0.5; 
-      } else {
-        drumMasterArr[i] = midArr[i] * 0.1; // Bleed, but mostly quiet
-      }
-      
-      prevEnergy = energy;
-    }
-
-    onProgress(70);
-
-    // 5. Inst/Other is the Sides + anything leftover
-    const otherArr = new Float32Array(length);
-    for (let i = 0; i < length; i++) {
-      // It's mostly the stereo spread (synths, guitars, wide pianos)
-      otherArr[i] = sideArr[i] * 1.5; // Boost side slightly to make up for mid loss
-    }
-
+    // 6. Apply Masks and Reconstruct (ISTFT)
     onProgress(80);
-
-    // Package into AudioBuffers
-    const createStereoBuffer = (monoData) => {
-      const b = this.ctx.createBuffer(2, length, sampleRate);
-      b.getChannelData(0).set(monoData);
-      b.getChannelData(1).set(monoData);
-      return b;
+    const applyMaskAndISTFT = (mask, stftArr) => {
+        const maskedSTFT = stftArr.map((f, fr) => ({
+            re: f.re.map((r, i) => r * mask[fr][i]),
+            im: f.im.map((m, i) => m * mask[fr][i])
+        }));
+        return DSPUtils.istft(maskedSTFT, this.FFT_SIZE, this.HOP_SIZE);
     };
 
-    const createRealStereoBuffer = (leftData, rightData) => {
-      const b = this.ctx.createBuffer(2, length, sampleRate);
-      b.getChannelData(0).set(leftData);
-      b.getChannelData(1).set(rightData);
-      return b;
-    };
+    const vocalsL = applyMaskAndISTFT(vocalMask, stftL);
+    const vocalsR = applyMaskAndISTFT(vocalMask, stftR);
+    const drumsL = applyMaskAndISTFT(drumMask, stftL);
+    const drumsR = applyMaskAndISTFT(drumMask, stftR);
+    const bassL = applyMaskAndISTFT(bassMask, stftL);
+    const bassR = applyMaskAndISTFT(bassMask, stftR);
+    const otherL = applyMaskAndISTFT(otherMask, stftL);
+    const otherR = applyMaskAndISTFT(otherMask, stftR);
 
-    // The other track is actually stereo, we can reconstruct it by doing M'+S and M'-S
-    // Wait, other is purely side here. Let's make it real stereo (L=S, R=-S)
-    const otherLeft = new Float32Array(length);
-    const otherRight = new Float32Array(length);
-    for(let i=0; i<length; i++) {
-        otherLeft[i] = otherArr[i];
-        otherRight[i] = -otherArr[i];
-    }
-
-    onProgress(90);
-
-    const stems = {
-      vocals: createStereoBuffer(vocalArr),
-      bass: createStereoBuffer(bassArr),
-      drums: createStereoBuffer(drumMasterArr),
-      other: createRealStereoBuffer(otherLeft, otherRight)
+    onProgress(95);
+    const createBuffer = (l, r) => {
+        const b = this.ctx.createBuffer(2, l.length, sampleRate);
+        b.getChannelData(0).set(l);
+        b.getChannelData(1).set(r);
+        return b;
     };
 
     onProgress(100);
-    return stems;
+    return {
+        vocals: createBuffer(vocalsL, vocalsR),
+        drums: createBuffer(drumsL, drumsR),
+        bass: createBuffer(bassL, bassR),
+        other: createBuffer(otherL, otherR)
+    };
   }
 }

@@ -255,7 +255,7 @@ export default function StemMixer() {
         
         {isProcessing && (
           <div style={{ width: '100%', maxWidth: '400px', textAlign: 'center' }}>
-            <p style={{ marginBottom: '8px', color: 'var(--text-secondary)' }}>Extracting isolated stems using mid/side DSP...</p>
+            <p style={{ marginBottom: '8px', color: 'var(--text-secondary)' }}>Extracting isolated stems using advanced spectral masking & HPS...</p>
             <div style={{ width: '100%', height: '8px', background: 'var(--bg-tertiary)', borderRadius: '4px', overflow: 'hidden' }}>
               <div style={{ width: `${progress}%`, height: '100%', background: 'var(--accent-primary)', transition: 'width 0.2s' }} />
             </div>
