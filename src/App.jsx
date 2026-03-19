@@ -1,29 +1,83 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useApp } from './context/AppContext';
 import { useLayout } from './context/LayoutContext';
+
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import AudioUploader from './components/AudioUploader';
-import WaveformViewer from './components/WaveformViewer';
 import PlaybackControls from './components/PlaybackControls';
-import NoteEditor from './components/NoteEditor';
-import MeasureEditingMode from './components/MeasureEditingMode';
 import ExportDialog from './components/ExportDialog';
 import OpenFileDialog from './components/OpenFileDialog';
 import SettingsDialog from './components/SettingsDialog';
+
 import ChannelStrip from './components/daw/ChannelStrip';
 import PropertiesInspector from './components/daw/PropertiesInspector';
 import PluginTabs from './components/daw/PluginTabs';
 import DockZone from './components/daw/DockZone';
-import { LayoutList } from 'lucide-react';
+import DockablePanel from './components/daw/DockablePanel';
+import TimelinePanel from './components/daw/TimelinePanel';
+import NotationTabs from './components/daw/NotationTabs';
+
+import { Menu, Sliders, Settings, PenTool, LayoutList, Music, Plug } from 'lucide-react';
+
+const PANEL_CONFIG = {
+  header: { component: Header, title: 'MAIN MENU', icon: Menu, noPadding: true, collapsible: false },
+  channels: { component: ChannelStrip, title: 'CHANNELS', icon: Sliders },
+  properties: { component: PropertiesInspector, title: 'PROPERTIES', icon: Settings },
+  tools: { component: Sidebar, title: 'TOOLS', icon: PenTool, noPadding: true },
+  timeline: { component: TimelinePanel, title: 'TIMELINE', icon: LayoutList, noPadding: true, collapsible: false },
+  notations: { component: NotationTabs, title: 'NOTATION & VIEWS', icon: Music, noPadding: true },
+  plugins: { component: PluginTabs, title: 'PLUGINS', icon: Plug, noPadding: true },
+};
+
+function ZoneRenderer({ zoneId, direction = 'vertical' }) {
+  const { layout } = useLayout();
+  const panels = layout.zones[zoneId]?.panels || [];
+
+  if (panels.length === 0) {
+    return (
+      <DockZone zone={zoneId} className="empty-zone">
+        <div className="empty-zone-text">Drop panels here</div>
+      </DockZone>
+    );
+  }
+
+  return (
+    <DockZone zone={zoneId} className={`zone-${direction}`}>
+      <PanelGroup direction={direction}>
+        {panels.map((panelId, index) => {
+          const config = PANEL_CONFIG[panelId];
+          if (!config) return null;
+          const Component = config.component;
+          return (
+            <React.Fragment key={panelId}>
+              {index > 0 && <PanelResizeHandle className={`resize-handle-${direction === 'vertical' ? 'h' : 'v'}`} />}
+              <Panel minSize={10}>
+                 <DockablePanel
+                   id={panelId}
+                   title={config.title}
+                   icon={config.icon}
+                   noPadding={config.noPadding}
+                   collapsible={config.collapsible !== false}
+                 >
+                   <Component />
+                 </DockablePanel>
+              </Panel>
+            </React.Fragment>
+          );
+        })}
+      </PanelGroup>
+    </DockZone>
+  );
+}
 
 export default function App() {
   const { state, dispatch } = useApp();
   const { layout, layoutDispatch } = useLayout();
 
   // Sync Accent Color to CSS variables
-  React.useEffect(() => {
+  useEffect(() => {
     const root = document.documentElement;
     const accent = state.preferences.accentColor || '#7c5cfc';
     root.style.setProperty('--accent-primary', accent);
@@ -31,7 +85,6 @@ export default function App() {
     root.style.setProperty('--border-hover', `${accent}66`);
   }, [state.preferences.accentColor]);
 
-  // Handle file from OpenFileDialog
   const handleFileReady = async (file, settings) => {
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     try {
@@ -40,14 +93,8 @@ export default function App() {
 
       dispatch({
         type: 'SET_AUDIO',
-        payload: {
-          file,
-          buffer: audioBuffer,
-          name: file.name,
-          duration: audioBuffer.duration,
-        },
+        payload: { file, buffer: audioBuffer, name: file.name, duration: audioBuffer.duration },
       });
-
       dispatch({ type: 'SET_FILE_SETTINGS', payload: settings });
 
       if (settings.processingMode === 'findNotes') {
@@ -61,22 +108,23 @@ export default function App() {
           audioBuffer,
           state.sensitivity,
           state.preferences.advancedDSP,
-          ({ progress, step }) => {
-            dispatch({ type: 'UPDATE_TRANSCRIPTION_PROGRESS', payload: { progress, step } });
-          }
+          ({ progress, step }) => dispatch({ type: 'UPDATE_TRANSCRIPTION_PROGRESS', payload: { progress, step } })
         );
 
         dispatch({
           type: 'SET_TRANSCRIPTION_RESULT',
           payload: {
             notes: result.notes,
-            candidateNotes: [],
             beats: result.beats,
             tempo: result.tempo,
             timeSignature: result.timeSignature,
             measures: result.measures,
           },
         });
+
+        // Automatically configure layout to show Notations after transcription
+        layoutDispatch({ type: 'SET_ACTIVE_SORTED_TAB', payload: 'sheet' });
+        layoutDispatch({ type: 'SET_VIEW_MODE', payload: 'sheet' });
       }
 
       // Compute spectrogram
@@ -84,119 +132,84 @@ export default function App() {
       SpectrogramEngine.compute(audioBuffer, {
         fftSize: settings.frequencyResolution,
         hopSize: settings.timeStep,
-      }).then(data => {
-        dispatch({ type: 'SET_SPECTROGRAM_DATA', payload: data });
-      });
+      }).then(data => dispatch({ type: 'SET_SPECTROGRAM_DATA', payload: data }));
     } catch (err) {
       console.error('Error processing file:', err);
       alert('Error processing file. Try a different format.');
     }
   };
 
-  const renderRightPanel = () => {
-    if (state.editMode === 'measure') {
-      return <MeasureEditingMode />;
-    }
-    return <NoteEditor />;
-  };
-
   return (
-    <div className="app-container daw-layout">
-      <Header />
-
+    <div className="app-container daw-layout" style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      
       {!state.audioBuffer ? (
-        <div className="workspace" style={{ flex: 1 }}>
-          <AudioUploader />
-        </div>
+        <>
+          <Header />
+          <div className="workspace" style={{ flex: 1 }}>
+            <AudioUploader />
+          </div>
+        </>
       ) : (
-        <div className="workspace daw-workspace" style={{ flex: 1 }}>
-          <PanelGroup direction="horizontal" autoSaveId="daw-layout-h">
-            {/* ==== LEFT ZONE: Channels + Properties + Tools ==== */}
-            <Panel defaultSize={20} minSize={12} maxSize={30}>
-              <DockZone zone="left">
-                <PanelGroup direction="vertical" autoSaveId="daw-left-v">
-                  {/* Channel Strip */}
-                  <Panel defaultSize={40} minSize={20}>
-                    <div className="daw-panel-wrapper">
-                      <div className="daw-panel-label">
-                        <span>CHANNELS</span>
-                      </div>
-                      <div className="daw-panel-body">
-                        <ChannelStrip />
-                      </div>
-                    </div>
-                  </Panel>
-                  <PanelResizeHandle className="resize-handle-h" />
+        <div className="workspace daw-workspace" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          
+          <PanelGroup direction="vertical">
+            {/* ==== TOP ZONE ==== */}
+            {layout.zones?.top?.panels?.length > 0 && (
+              <>
+                <Panel defaultSize={8} minSize={5} maxSize={15} style={{ zIndex: 50 }}>
+                  <ZoneRenderer zoneId="top" direction="horizontal" />
+                </Panel>
+                <PanelResizeHandle className="resize-handle-h" />
+              </>
+            )}
 
-                  {/* Properties Inspector */}
-                  <Panel defaultSize={35} minSize={15}>
-                    <div className="daw-panel-wrapper">
-                      <div className="daw-panel-label">
-                        <span>PROPERTIES</span>
-                      </div>
-                      <div className="daw-panel-body">
-                        <PropertiesInspector />
-                      </div>
-                    </div>
-                  </Panel>
-                  <PanelResizeHandle className="resize-handle-h" />
+            {/* ==== MAIN MIDDLE AREA ==== */}
+            <Panel>
+              <PanelGroup direction="horizontal">
+                
+                {/* ==== LEFT ZONE ==== */}
+                {layout.zones?.left?.panels?.length > 0 && (
+                  <>
+                    <Panel defaultSize={20} minSize={12} maxSize={40}>
+                      <ZoneRenderer zoneId="left" direction="vertical" />
+                    </Panel>
+                    <PanelResizeHandle className="resize-handle-v" />
+                  </>
+                )}
 
-                  {/* Tools */}
-                  <Panel defaultSize={25} minSize={15}>
-                    <div className="daw-panel-wrapper">
-                      <div className="daw-panel-label">
-                        <span>TOOLS</span>
-                      </div>
-                      <div className="daw-panel-body">
-                        <Sidebar />
-                      </div>
-                    </div>
-                  </Panel>
-                </PanelGroup>
-              </DockZone>
+                {/* ==== CENTER ZONE ==== */}
+                <Panel defaultSize={55} minSize={30}>
+                  <ZoneRenderer zoneId="center" direction="vertical" />
+                </Panel>
+
+                {/* ==== RIGHT ZONE ==== */}
+                {layout.zones?.right?.panels?.length > 0 && (
+                  <>
+                    <PanelResizeHandle className="resize-handle-v" />
+                    <Panel defaultSize={25} minSize={15} maxSize={40}>
+                      <ZoneRenderer zoneId="right" direction="vertical" />
+                    </Panel>
+                  </>
+                )}
+
+              </PanelGroup>
             </Panel>
-            <PanelResizeHandle className="resize-handle-v" />
-
-            {/* ==== CENTER ZONE: Timeline + Bottom Dock ==== */}
-            <Panel defaultSize={55} minSize={35}>
-              <DockZone zone="center">
-                <PanelGroup direction="vertical" autoSaveId="daw-center-v">
-                  {/* Main Timeline / Waveform */}
-                  <Panel defaultSize={100} minSize={40}>
-                    <div className="daw-panel-wrapper center-panel">
-                      <div className="daw-panel-label">
-                        <span>TIMELINE</span>
-                        <div className="timeline-mode-indicator">
-                          <LayoutList size={11} />
-                          <span>{state.editMode === 'note' ? 'Note Mode' : 'Measure Mode'}</span>
-                        </div>
-                      </div>
-                      <div className="daw-panel-body timeline-body">
-                        <WaveformViewer />
-                        <div className="timeline-content-area">
-                          {renderRightPanel()}
-                        </div>
-                      </div>
-                    </div>
-                  </Panel>
-                </PanelGroup>
-              </DockZone>
-            </Panel>
-            <PanelResizeHandle className="resize-handle-v" />
-
-            {/* ==== RIGHT ZONE: Plugins + Sorted Tabs ==== */}
-            <Panel defaultSize={25} minSize={16} maxSize={40}>
-              <DockZone zone="right">
-                <div className="daw-panel-wrapper right-panel">
-                  <PluginTabs />
-                </div>
-              </DockZone>
-            </Panel>
+            
+            {/* ==== BOTTOM ZONE ==== */}
+            {layout.zones?.bottom?.panels?.length > 0 && (
+              <>
+                <PanelResizeHandle className="resize-handle-h" />
+                <Panel defaultSize={20} minSize={10} maxSize={50}>
+                  <ZoneRenderer zoneId="bottom" direction="horizontal" />
+                </Panel>
+              </>
+            )}
+            
           </PanelGroup>
         </div>
       )}
 
-      <PlaybackControls />
+      {state.audioBuffer && <PlaybackControls />}
 
       {/* Processing overlay */}
       {state.isTranscribing && (

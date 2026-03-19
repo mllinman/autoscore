@@ -28,13 +28,6 @@ const defaultLayout = {
       collapsed: true,
     },
   },
-    bottom: {
-      panels: ['stems', 'autotune', 'pianoroll'],
-      activeTab: 'stems',
-      collapsed: true,
-      size: 30,
-    },
-  },
   panelVisibility: {
     channels: true,
     properties: true,

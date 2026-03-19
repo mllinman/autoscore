@@ -39,6 +39,7 @@ export default function Header() {
             className="btn btn-ghost btn-sm"
             onClick={() => setShowFileMenu(!showFileMenu)}
             style={{ fontSize: 'var(--text-sm)' }}
+            title="File Menu"
           >
             File <ChevronDown size={12} />
           </button>

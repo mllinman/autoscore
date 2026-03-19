@@ -326,7 +326,7 @@ export default function PlaybackControls() {
         </div>
 
         {/* Volume */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="Master Volume">
           <Volume2 size={12} style={{ color: 'var(--text-tertiary)' }} />
           <input
             type="range"
@@ -341,7 +341,7 @@ export default function PlaybackControls() {
 
         {/* Note volume */}
         {(playbackMode === 'notes' || playbackMode === 'both') && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="Note Synthesizer Volume">
             <Music2 size={12} style={{ color: 'var(--accent-tertiary)' }} />
             <input
               type="range"

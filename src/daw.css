@@ -1,9 +1,9 @@
 /* ============================================================
-   DAW / Cakewalk-Style Layout System
+   DAW / Layout System
    Premium dark theme with depth, thin black separators
    ============================================================ */
 
-/* ---------- CSS Overrides for Cakewalk Look ---------- */
+/* ---------- CSS Overrides for Look ---------- */
 :root {
   --daw-bg-darkest: #0d0d12;
   --daw-bg-dark: #141419;
@@ -13,9 +13,9 @@
   --daw-separator: #000000;
   --daw-separator-width: 2px;
   --daw-highlight: rgba(255, 255, 255, 0.05);
-  --daw-inner-shadow: inset 0 1px 0 rgba(255,255,255,0.04), inset 0 -1px 0 rgba(0,0,0,0.4);
-  --daw-panel-shadow: 0 2px 8px rgba(0,0,0,0.5);
-  --daw-depth-inset: inset 0 2px 4px rgba(0,0,0,0.3);
+  --daw-inner-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), inset 0 -1px 0 rgba(0, 0, 0, 0.4);
+  --daw-panel-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  --daw-depth-inset: inset 0 2px 4px rgba(0, 0, 0, 0.3);
   --daw-header-gradient: linear-gradient(180deg, #1e1e2a 0%, #16161f 100%);
   --daw-metallic: linear-gradient(180deg, #2a2a35 0%, #1e1e28 100%);
   --daw-fader-track: linear-gradient(180deg, #34d399 0%, #fbbf24 60%, #ef4444 100%);
@@ -61,21 +61,27 @@
 }
 
 .resize-handle-v::after {
-  top: 50%; left: 50%;
+  top: 50%;
+  left: 50%;
   transform: translate(-50%, -50%);
-  width: 2px; height: 30px;
+  width: 2px;
+  height: 30px;
   background: var(--accent-primary);
 }
 
 .resize-handle-h::after {
-  left: 50%; top: 50%;
+  left: 50%;
+  top: 50%;
   transform: translate(-50%, -50%);
-  height: 2px; width: 30px;
+  height: 2px;
+  width: 30px;
   background: var(--accent-primary);
 }
 
 .resize-handle-v:hover::after,
-.resize-handle-h:hover::after { opacity: 1; }
+.resize-handle-h:hover::after {
+  opacity: 1;
+}
 
 /* ---------- DAW Panel Wrapper ---------- */
 .daw-panel-wrapper {
@@ -83,7 +89,7 @@
   display: flex;
   flex-direction: column;
   background: var(--daw-bg-dark);
-  border: 1px solid rgba(0,0,0,0.6);
+  border: 1px solid rgba(0, 0, 0, 0.6);
   box-shadow: var(--daw-inner-shadow);
   overflow: hidden;
 }
@@ -112,7 +118,7 @@
   -webkit-user-select: none;
   user-select: none;
   min-height: 26px;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .daw-panel-label span {
@@ -166,8 +172,15 @@
 }
 
 @keyframes dockPulse {
-  0%, 100% { opacity: 0.5; }
-  50% { opacity: 1; }
+
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 
 .dock-zone-indicator {
@@ -204,7 +217,9 @@
   user-select: none;
 }
 
-.dockable-panel-header:active { cursor: grabbing; }
+.dockable-panel-header:active {
+  cursor: grabbing;
+}
 
 .dockable-panel-header-left {
   display: flex;
@@ -224,7 +239,9 @@
   display: flex;
 }
 
-.panel-header-icon { color: var(--accent-tertiary); }
+.panel-header-icon {
+  color: var(--accent-tertiary);
+}
 
 .panel-header-title {
   font-size: 10px;
@@ -251,7 +268,7 @@
 
 .panel-collapse-btn:hover,
 .panel-close-btn:hover {
-  background: rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
 }
 
@@ -261,7 +278,9 @@
   overflow: auto;
 }
 
-.dockable-panel-content.no-padding { padding: 0; }
+.dockable-panel-content.no-padding {
+  padding: 0;
+}
 
 /* ---------- Channel Strip ---------- */
 .channel-strip-container {
@@ -285,7 +304,9 @@
   padding-bottom: 6px;
 }
 
-.channel-strip.muted { opacity: 0.55; }
+.channel-strip.muted {
+  opacity: 0.55;
+}
 
 .channel-header {
   width: 100%;
@@ -298,7 +319,10 @@
   min-height: 24px;
 }
 
-.channel-header svg { color: var(--text-tertiary); flex-shrink: 0; }
+.channel-header svg {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
 
 .channel-name {
   font-size: 8px;
@@ -333,13 +357,24 @@
   flex: 1;
   min-height: 2px;
   border-radius: 1px;
-  background: rgba(255,255,255,0.06);
+  background: rgba(255, 255, 255, 0.06);
   transition: background 0.08s;
 }
 
-.vu-segment.green.active { background: #34d399; box-shadow: 0 0 3px rgba(52,211,153,0.4); }
-.vu-segment.yellow.active { background: #fbbf24; box-shadow: 0 0 3px rgba(251,191,36,0.4); }
-.vu-segment.red.active { background: #ef4444; box-shadow: 0 0 3px rgba(239,68,68,0.4); }
+.vu-segment.green.active {
+  background: #34d399;
+  box-shadow: 0 0 3px rgba(52, 211, 153, 0.4);
+}
+
+.vu-segment.yellow.active {
+  background: #fbbf24;
+  box-shadow: 0 0 3px rgba(251, 191, 36, 0.4);
+}
+
+.vu-segment.red.active {
+  background: #ef4444;
+  box-shadow: 0 0 3px rgba(239, 68, 68, 0.4);
+}
 
 /* Fader */
 .channel-fader {
@@ -352,7 +387,7 @@
 
 .fader-track {
   width: 6px;
-  background: rgba(255,255,255,0.06);
+  background: rgba(255, 255, 255, 0.06);
   border-radius: 3px;
   position: relative;
   overflow: hidden;
@@ -375,14 +410,16 @@
   width: 12px;
   height: 16px;
   background: var(--daw-metallic);
-  border: 1px solid rgba(255,255,255,0.15);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 2px;
   cursor: grab;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   z-index: 2;
 }
 
-.fader-thumb:active { cursor: grabbing; }
+.fader-thumb:active {
+  cursor: grabbing;
+}
 
 .fader-marks {
   display: flex;
@@ -408,8 +445,8 @@
   height: 22px;
   border-radius: 50%;
   background: var(--daw-metallic);
-  border: 1px solid rgba(255,255,255,0.1);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   position: relative;
   display: flex;
   align-items: center;
@@ -453,14 +490,33 @@
   font-family: var(--font-sans);
   background: var(--daw-bg-dark);
   color: var(--text-tertiary);
-  border: 1px solid rgba(255,255,255,0.06);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.ch-btn:hover { border-color: rgba(255,255,255,0.15); }
+.ch-btn:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+}
 
-.mute-btn.active { background: #ef4444; color: #fff; border-color: #ef4444; box-shadow: 0 0 4px rgba(239,68,68,0.4); }
-.solo-btn.active { background: #eab308; color: #000; border-color: #eab308; box-shadow: 0 0 4px rgba(234,179,8,0.4); }
-.arm-btn.active { background: #ef4444; color: #fff; border-color: #ef4444; animation: pulse 1.5s infinite; }
+.mute-btn.active {
+  background: #ef4444;
+  color: #fff;
+  border-color: #ef4444;
+  box-shadow: 0 0 4px rgba(239, 68, 68, 0.4);
+}
+
+.solo-btn.active {
+  background: #eab308;
+  color: #000;
+  border-color: #eab308;
+  box-shadow: 0 0 4px rgba(234, 179, 8, 0.4);
+}
+
+.arm-btn.active {
+  background: #ef4444;
+  color: #fff;
+  border-color: #ef4444;
+  animation: pulse 1.5s infinite;
+}
 
 .channel-value {
   font-size: 8px;
@@ -487,16 +543,18 @@
   align-items: center;
   gap: 5px;
   padding: 5px 8px;
-  background: rgba(0,0,0,0.2);
+  background: rgba(0, 0, 0, 0.2);
   font-size: 9px;
   font-weight: 700;
   color: var(--daw-tab-inactive);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
-.inspector-section-header svg { color: var(--accent-tertiary); }
+.inspector-section-header svg {
+  color: var(--accent-tertiary);
+}
 
 .inspector-badge {
   margin-left: auto;
@@ -533,7 +591,10 @@
   text-align: right;
 }
 
-.inspector-value.mono { font-family: var(--font-mono); }
+.inspector-value.mono {
+  font-family: var(--font-mono);
+}
+
 .inspector-value.truncate {
   max-width: 100px;
   overflow: hidden;
@@ -547,13 +608,15 @@
   gap: 4px;
 }
 
-.inspector-value-row svg { color: var(--accent-tertiary); }
+.inspector-value-row svg {
+  color: var(--accent-tertiary);
+}
 
 .inspector-select {
   padding: 2px 6px;
   padding-right: 18px;
   background: var(--daw-bg-mid);
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 3px;
   color: var(--text-primary);
   font-size: 10px;
@@ -579,7 +642,7 @@
   appearance: none;
   flex: 1;
   height: 3px;
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 2px;
   outline: none;
   cursor: pointer;
@@ -629,7 +692,9 @@
   position: relative;
 }
 
-.section-tab:last-child { border-right: none; }
+.section-tab:last-child {
+  border-right: none;
+}
 
 .section-tab:hover {
   background: var(--daw-bg-mid);
@@ -673,14 +738,14 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.12s;
-  border-right: 1px solid rgba(0,0,0,0.3);
+  border-right: 1px solid rgba(0, 0, 0, 0.3);
   position: relative;
   white-space: nowrap;
 }
 
 .strip-tab:hover {
   color: var(--text-primary);
-  background: rgba(255,255,255,0.03);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .strip-tab.active {
@@ -723,7 +788,7 @@
 
 .sidebar-section {
   padding: 6px 8px !important;
-  border-bottom: 1px solid rgba(0,0,0,0.3) !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.3) !important;
 }
 
 .sidebar-label {
@@ -743,10 +808,12 @@
 
 /* ---------- Header - DAW Style ---------- */
 .daw-layout .header {
-  background: var(--daw-header-gradient) !important;
-  border-bottom: var(--daw-separator-width) solid var(--daw-separator) !important;
-  height: 44px !important;
-  min-height: 44px !important;
+  position: relative !important;
+  background: transparent !important;
+  border-bottom: none !important;
+  height: 28px !important;
+  min-height: 28px !important;
+  padding: 0 4px !important;
 }
 
 .daw-layout .brand-icon {
@@ -823,7 +890,7 @@
 .progress-bar {
   flex: 1;
   height: 4px;
-  background: rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.08);
   border-radius: 2px;
   cursor: pointer;
   position: relative;
@@ -849,7 +916,9 @@
   transition: opacity 0.15s;
 }
 
-.progress-bar:hover .progress-handle { opacity: 1; }
+.progress-bar:hover .progress-handle {
+  opacity: 1;
+}
 
 .playback-play {
   width: 32px !important;
@@ -869,9 +938,9 @@
 /* ---------- Metallic Button Style ---------- */
 .daw-layout .btn {
   background: var(--daw-metallic);
-  border: 1px solid rgba(255,255,255,0.08);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
-  text-shadow: 0 1px 1px rgba(0,0,0,0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
 }
 
 .daw-layout .btn:hover {
@@ -904,7 +973,7 @@
 }
 
 .daw-layout .waveform-wrapper {
-  border: 1px solid rgba(255,255,255,0.06);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: var(--radius-sm);
   height: 80px;
 }
@@ -917,7 +986,7 @@
 
 .daw-layout .notation-canvas-wrapper {
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(0,0,0,0.4);
+  border: 1px solid rgba(0, 0, 0, 0.4);
   padding: 12px;
   background: var(--daw-bg-mid);
   box-shadow: var(--daw-depth-inset);
@@ -925,6 +994,11 @@
 
 /* ---------- Spin animation ---------- */
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
-.spin { animation: spin 1s linear infinite; }
+
+.spin {
+  animation: spin 1s linear infinite;
+}
