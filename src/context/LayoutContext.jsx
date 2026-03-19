@@ -7,24 +7,27 @@ const STORAGE_KEY = 'autoscore-layout-v2';
 // Default Cakewalk-style panel arrangement
 const defaultLayout = {
   zones: {
+    top: {
+      panels: ['header'],
+      collapsed: false,
+    },
     left: {
       panels: ['channels', 'properties', 'tools'],
-      activeTabs: { channels: true, properties: true, tools: true },
       collapsed: false,
-      size: 18,
     },
     center: {
-      panels: ['timeline'],
-      activeTabs: { timeline: true },
+      panels: ['timeline', 'notations'],
       collapsed: false,
-      size: 50,
     },
     right: {
-      panels: ['plugins', 'sorted'],
-      activeTab: 'sorted',
+      panels: ['plugins'],
       collapsed: false,
-      size: 22,
     },
+    bottom: {
+      panels: [],
+      collapsed: true,
+    },
+  },
     bottom: {
       panels: ['stems', 'autotune', 'pianoroll'],
       activeTab: 'stems',
