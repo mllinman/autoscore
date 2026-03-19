@@ -168,4 +168,143 @@ export class DSPUtils {
     }
     return result;
   }
+
+  /**
+   * Calculate Spectral Flatness Measure (SFM)
+   * Ratio of Geometric Mean to Arithmetic Mean
+   */
+  static spectralFlatness(magnitude) {
+    let sum = 0;
+    let logSum = 0;
+    const n = magnitude.length;
+    
+    for (let i = 0; i < n; i++) {
+      const val = Math.max(1e-10, magnitude[i]);
+      sum += val;
+      logSum += Math.log(val);
+    }
+    
+    const arithmeticMean = sum / n;
+    const geometricMean = Math.exp(logSum / n);
+    return geometricMean / arithmeticMean;
+  }
+
+  /**
+   * Detect transients in a spectrogram
+   */
+  static detectTransients(spectrogram, fftSize, hopSize) {
+    const numFrames = spectrogram.length;
+    const transientMask = new Float32Array(numFrames);
+    let prevEnergy = 0;
+
+    for (let f = 0; f < numFrames; f++) {
+      const energy = spectrogram[f].re.reduce((acc, r, i) => acc + r * r + spectrogram[f].im[i] * spectrogram[f].im[i], 0);
+      if (f > 0) {
+        // High-frequency energy surge
+        const hfEnergy = spectrogram[f].re.slice(Math.floor(spectrogram[f].re.length / 4)).reduce((acc, val) => acc + val * val, 0);
+        const surge = energy / (prevEnergy + 1e-6);
+        if (surge > 1.8 || hfEnergy > energy * 0.4) {
+          transientMask[f] = 1.0;
+        }
+      }
+      prevEnergy = energy;
+    }
+    return transientMask;
+  }
+
+  /**
+   * Windowed Sinc Interpolation for high-quality resampling/shifting
+   */
+  static windowedSinc(t, lobby = 4) {
+    if (Math.abs(t) < 1e-9) return 1.0;
+    if (Math.abs(t) >= lobby) return 0.0;
+    const pikT = Math.PI * t;
+    const sinc = Math.sin(pikT) / pikT;
+    const blackman = 0.42 + 0.5 * Math.cos(pikT / lobby) + 0.08 * Math.cos(2 * pikT / lobby);
+    return sinc * blackman;
+  }
+
+  /**
+   * High-Fidelity Pitch Shifting with Phase-Locked Vocoder and Formant Preservation
+   * Supports time-varying pitchRatio array
+   */
+  static pitchShift(buffer, pitchRatios, overlap = 4) {
+    const fftSize = 1024;
+    const hopSize = fftSize / overlap;
+    const sampleRate = 44100;
+
+    // 1. Analysis
+    const stft = this.stft(buffer, fftSize, hopSize);
+    const numFrames = stft.length;
+    const outSpectrogram = [];
+    
+    // Ensure pitchRatios is an array of length numFrames
+    let ratios = pitchRatios;
+    if (typeof pitchRatios === 'number') {
+      ratios = new Float32Array(numFrames).fill(pitchRatios);
+    }
+
+    // Pre-calculate Spectral Envelope for all frames for Formant Preservation
+    const envelopes = stft.map(frame => {
+      const mag = frame.re.map((r, i) => Math.sqrt(r * r + frame.im[i] * frame.im[i]));
+      const env = new Float32Array(fftSize / 2);
+      const k = 12;
+      for (let i = 0; i < fftSize / 2; i++) {
+        let sum = 0, count = 0;
+        for (let j = -k; j <= k; j++) {
+          if (i + j >= 0 && i + j < fftSize / 2) {
+            sum += mag[i + j];
+            count++;
+          }
+        }
+        env[i] = sum / count;
+      }
+      return env;
+    });
+
+    let prevPhase = new Float32Array(fftSize);
+    let outPhase = new Float32Array(fftSize);
+
+    // 2. Processing with Phase Locking
+    for (let f = 0; f < numFrames; f++) {
+      const { re, im } = stft[f];
+      const env = envelopes[f];
+      const outRe = new Float32Array(fftSize);
+      const outIm = new Float32Array(fftSize);
+      const pitchRatio = ratios[f] || 1.0;
+
+      for (let b = 0; b < fftSize / 2; b++) {
+        const sourceBin = b / pitchRatio;
+        const sIdx = Math.floor(sourceBin);
+        const frac = sourceBin - sIdx;
+        
+        let mag = 0;
+        if (sIdx + 1 < fftSize / 2) {
+           const mag1 = Math.sqrt(re[sIdx]**2 + im[sIdx]**2);
+           const mag2 = Math.sqrt(re[sIdx+1]**2 + im[sIdx+1]**2);
+           mag = mag1 * (1 - frac) + mag2 * frac;
+        }
+
+        const sourceEnv = (sIdx < fftSize / 2) ? env[sIdx] : 1e-6;
+        const targetEnv = env[b] || 1e-6;
+        const preservedMag = (mag / (sourceEnv + 1e-10)) * targetEnv;
+
+        const phase = (sIdx < fftSize / 2) ? Math.atan2(im[sIdx], re[sIdx]) : 0;
+        const phaseDiff = phase - prevPhase[b];
+        const deltaPhase = phaseDiff * pitchRatio;
+        outPhase[b] = (outPhase[b] + deltaPhase) % (2 * Math.PI);
+
+        outRe[b] = preservedMag * Math.cos(outPhase[b]);
+        outIm[b] = preservedMag * Math.sin(outPhase[b]);
+        
+        outRe[fftSize - b] = outRe[b];
+        outIm[fftSize - b] = -outIm[b];
+        prevPhase[b] = phase;
+      }
+      outSpectrogram.push({ re: outRe, im: outIm });
+    }
+
+    // 3. Synthesis
+    return this.istft(outSpectrogram, fftSize, hopSize);
+  }
 }

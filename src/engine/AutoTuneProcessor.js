@@ -17,23 +17,51 @@ export class AutoTuneProcessor {
     // 1. Detect Pitch over time
     const detector = new PitchDetector(buffer.sampleRate, 0.15, 5);
     const pitchData = await detector.processBuffer(buffer, (p) => {
-      onProgress(5 + p * 30); // 5% to 35% is pitch detection
+      onProgress(5 + p * 30);
     });
 
     onProgress(40);
 
-    // 2. Map pitches to target frequencies
+    // 2. Map pitches to target frequencies (Scale-aware)
     const targetPitches = this.calculateTargetPitches(pitchData, settings);
 
     onProgress(50);
 
-    // 3. Apply Granular Pitch Shifting (Offline PSOLA approximation)
-    const newBuffer = this.granularPitchShift(buffer, pitchData, targetPitches, settings, (p) => {
-      onProgress(50 + p * 50); // 50% to 100% is pitch shifting
-    });
+    // 3. Convert target pitches to pitch ratios for STFT frames
+    const fftSize = 1024;
+    const hopSize = fftSize / 4;
+    const numFrames = Math.floor((buffer.length - fftSize) / hopSize) + 1;
+    const ratios = new Float32Array(numFrames);
+
+    for (let f = 0; f < numFrames; f++) {
+      const timeSecs = (f * hopSize) / buffer.sampleRate;
+      const dataIdx = Math.floor((timeSecs / buffer.duration) * pitchData.length);
+      const sourceFreq = pitchData[dataIdx]?.frequency || 0;
+      const targetFreq = targetPitches[dataIdx] || 0;
+      
+      if (sourceFreq > 40 && targetFreq > 40) {
+        ratios[f] = targetFreq / sourceFreq;
+      } else {
+        ratios[f] = 1.0;
+      }
+    }
+
+    // 4. Apply High-Fidelity Pitch Shifting
+    const leftChannel = buffer.getChannelData(0);
+    const rightChannel = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : leftChannel;
+    
+    onProgress(60);
+    const shiftedL = DSPUtils.pitchShift(leftChannel, ratios);
+    onProgress(80);
+    const shiftedR = buffer.numberOfChannels > 1 ? DSPUtils.pitchShift(rightChannel, ratios) : shiftedL;
+
+    onProgress(95);
+    const outBuffer = this.ctx.createBuffer(buffer.numberOfChannels, shiftedL.length, buffer.sampleRate);
+    outBuffer.getChannelData(0).set(shiftedL);
+    if (buffer.numberOfChannels > 1) outBuffer.getChannelData(1).set(shiftedR);
 
     onProgress(100);
-    return newBuffer;
+    return outBuffer;
   }
 
   /**
@@ -41,36 +69,61 @@ export class AutoTuneProcessor {
    */
   calculateTargetPitches(pitchData, settings) {
     const targets = new Float32Array(pitchData.length);
-    const speed = settings.retuneSpeed / 100.0; // 0 (slow/natural) to 1 (fast/robotic)
+    const speed = settings.retuneSpeed / 100.0;
     
-    // Simple chromatic snapping for proof of concept
-    // You could expand this to snap to specific scales (Major, Minor, Pentatonic)
+    // Scale definition
+    const SCALES = {
+      major: [0, 2, 4, 5, 7, 9, 11],
+      minor: [0, 2, 3, 5, 7, 8, 10],
+      chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    };
+
+    const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const rootMidi = NOTE_NAMES.indexOf(settings.key || 'C');
+    const scaleSteps = SCALES[settings.scale] || SCALES.chromatic;
+    
+    // Map absolute MIDI notes allowed in this scale
+    const allowedMidi = [];
+    for (let oct = -1; oct <= 9; oct++) {
+      for (const step of scaleSteps) {
+        allowedMidi.push(oct * 12 + rootMidi + step);
+      }
+    }
     
     let currentTarget = 0;
     
     for (let i = 0; i < pitchData.length; i++) {
       const data = pitchData[i];
-      if (!data.hasPitch || data.frequency < 50) {
+      if (!data.hasPitch || data.frequency < 40) {
         targets[i] = 0;
         currentTarget = 0;
         continue;
       }
 
-      // Convert Hz to MIDI Note
       const midiFloat = 69 + 12 * Math.log2(data.frequency / 440.0);
       
-      // Quantize to nearest whole note (Chromatic scale)
-      const targetMidi = Math.round(midiFloat);
+      // Snap to nearest allowed MIDI note
+      let targetMidi = allowedMidi[0];
+      let minDiff = Math.abs(midiFloat - targetMidi);
       
-      // Convert back to Hz
+      // Binary search or just find nearest since allowedMidi is sorted
+      for (const note of allowedMidi) {
+        const diff = Math.abs(midiFloat - note);
+        if (diff < minDiff) {
+          minDiff = diff;
+          targetMidi = note;
+        } else if (diff > minDiff) {
+          break; // Since it's sorted
+        }
+      }
+      
       const exactFreq = 440.0 * Math.pow(2, (targetMidi - 69) / 12.0);
       
-      // Retune speed smoothing (glissando/portamento effect)
       if (currentTarget === 0) {
         currentTarget = exactFreq;
       } else {
-        // Fast speed = instant snap. Slow speed = smooth glide to target
-        const alpha = 0.05 + (0.95 * speed); 
+        // Natural smoothing curve
+        const alpha = 0.02 + (0.98 * speed); 
         currentTarget = (currentTarget * (1 - alpha)) + (exactFreq * alpha);
       }
       
