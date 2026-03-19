@@ -104,187 +104,162 @@ export default function SettingsDialog() {
             
             {/* --- GENERAL TAB --- */}
             {activeTab === 'general' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-xl)' }}>
-                <div>
-                  <h3 style={{ fontSize: 'var(--text-md)', marginBottom: 'var(--space-md)', color: 'var(--text-primary)' }}>Behavior</h3>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)', background: 'var(--bg-secondary)', padding: 'var(--space-md)', borderRadius: 'var(--radius-md)' }}>
-                    <input 
-                      type="checkbox" 
-                      id="autosave" 
-                      checked={prefs.autoSave}
-                      onChange={(e) => updatePrefs({ autoSave: e.target.checked })}
-                      style={{ cursor: 'pointer' }}
-                    />
-                    <label htmlFor="autosave" style={{ flex: 1, cursor: 'pointer' }}>
-                      <div style={{ color: 'var(--text-primary)', fontWeight: 500 }}>Auto-save Project</div>
-                      <div style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-xs)' }}>Automatically save your transcription progress to local browser storage.</div>
-                    </label>
-                  </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+                <h3 style={{ fontSize: 'var(--text-md)', marginBottom: 'var(--space-xs)', color: 'var(--text-primary)' }}>Preferences</h3>
+                
+                <div className="pref-row">
+                  <label>Language</label>
+                  <select className="select" value={prefs.language} onChange={(e) => updatePrefs({ language: e.target.value })}>
+                    <option value="en">English (US)</option>
+                    <option value="de">Deutsch</option>
+                    <option value="fr">Français</option>
+                    <option value="es">Español</option>
+                  </select>
                 </div>
 
-                <div>
-                  <h3 style={{ fontSize: 'var(--text-md)', marginBottom: 'var(--space-md)', color: 'var(--text-primary)' }}>System Reset</h3>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-secondary)', padding: 'var(--space-md)', borderRadius: 'var(--radius-md)' }}>
-                    <div>
-                      <div style={{ color: 'var(--text-primary)', fontWeight: 500 }}>Reset Preferences</div>
-                      <div style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-xs)' }}>Restore all settings to their factory defaults.</div>
-                    </div>
-                    <button className="btn btn-ghost" style={{ color: 'var(--color-error)' }}>
-                      <RefreshCw size={14} /> Reset
-                    </button>
+                <div className="pref-row">
+                  <label>Auto-scroll Timeline</label>
+                  <input type="checkbox" checked={prefs.autoScroll} onChange={(e) => updatePrefs({ autoScroll: e.target.checked })} />
+                </div>
+
+                <div className="pref-row">
+                  <label>Auto-save Interval</label>
+                  <select className="select" value="5min">
+                    <option value="1min">Every 1 Minute</option>
+                    <option value="5min">Every 5 Minutes</option>
+                    <option value="10min">Every 10 Minutes</option>
+                  </select>
+                </div>
+
+                <div className="divider" style={{ margin: 'var(--space-md) 0' }} />
+
+                <h3 style={{ fontSize: 'var(--text-md)', marginBottom: 'var(--space-xs)', color: 'var(--text-primary)' }}>System Reset</h3>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-secondary)', padding: 'var(--space-md)', borderRadius: 'var(--radius-md)' }}>
+                  <div>
+                    <div style={{ color: 'var(--text-primary)', fontWeight: 500 }}>Reset All State</div>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-xs)' }}>Restore all settings and clear current project.</div>
                   </div>
+                  <button className="btn btn-ghost" style={{ color: 'var(--color-error)' }} onClick={() => dispatch({ type: 'RESET_PROJECT' })}>
+                    <RefreshCw size={14} /> Factory Reset
+                  </button>
                 </div>
               </div>
             )}
 
             {/* --- APPEARANCE TAB --- */}
             {activeTab === 'appearance' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-xl)' }}>
-                <div>
-                  <h3 style={{ fontSize: 'var(--text-md)', marginBottom: 'var(--space-md)', color: 'var(--text-primary)' }}>Theme</h3>
-                  <div style={{ display: 'flex', gap: 'var(--space-md)' }}>
-                    {['dark', 'light'].map(theme => (
-                      <button
-                        key={theme}
-                        onClick={() => updatePrefs({ theme })}
-                        style={{
-                          flex: 1, padding: 'var(--space-lg)',
-                          background: prefs.theme === theme ? 'var(--bg-tertiary)' : 'var(--bg-secondary)',
-                          border: `2px solid ${prefs.theme === theme ? 'var(--accent-primary)' : 'transparent'}`,
-                          borderRadius: 'var(--radius-md)', cursor: 'pointer',
-                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-sm)'
-                        }}
-                      >
-                        <div style={{ 
-                          width: '40px', height: '40px', borderRadius: '50%', 
-                          background: theme === 'dark' ? '#0a0a0f' : '#ffffff',
-                          border: '1px solid var(--border-subtle)'
-                        }} />
-                        <span style={{ textTransform: 'capitalize', color: 'var(--text-primary)' }}>{theme} Mode</span>
-                        {theme === 'light' && <span style={{ fontSize: '10px', color: 'var(--color-warning)' }}>(Coming Soon)</span>}
-                      </button>
-                    ))}
-                  </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+                <h3 style={{ fontSize: 'var(--text-md)', marginBottom: 'var(--space-xs)', color: 'var(--text-primary)' }}>Interface Scale</h3>
+                <input type="range" min="80" max="120" step="5" value={prefs.uiScale} onChange={(e) => updatePrefs({ uiScale: parseInt(e.target.value) })} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px' }}><span>80%</span><span>100%</span><span>120%</span></div>
+
+                <div className="divider" style={{ margin: 'var(--space-md) 0' }} />
+
+                <h3 style={{ fontSize: 'var(--text-md)', marginBottom: 'var(--space-xs)', color: 'var(--text-primary)' }}>Effects</h3>
+                <div className="pref-row">
+                  <label>Vibrant Accents (Glow)</label>
+                  <input type="checkbox" checked={prefs.vibrantAccents} onChange={(e) => updatePrefs({ vibrantAccents: e.target.checked })} />
+                </div>
+                <div className="pref-row">
+                  <label>Panel Opacity</label>
+                  <input type="range" min="60" max="100" value={prefs.panelOpacity} onChange={(e) => updatePrefs({ panelOpacity: parseInt(e.target.value) })} />
                 </div>
 
-                <div>
-                  <h3 style={{ fontSize: 'var(--text-md)', marginBottom: 'var(--space-md)', color: 'var(--text-primary)' }}>Accent Color</h3>
-                  <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
-                    {['#7c5cfc', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899'].map(color => (
-                      <button
-                        key={color}
-                        onClick={() => updatePrefs({ accentColor: color })}
-                        style={{
-                          width: '36px', height: '36px', borderRadius: '50%',
-                          background: color, border: 'none', cursor: 'pointer',
-                          boxShadow: prefs.accentColor === color ? `0 0 0 3px var(--bg-primary), 0 0 0 5px ${color}` : 'none',
-                          transform: prefs.accentColor === color ? 'scale(1.1)' : 'scale(1)',
-                          transition: 'all 0.2s ease'
-                        }}
-                      />
-                    ))}
-                  </div>
-                  <p style={{ marginTop: 'var(--space-sm)', fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>
-                    Changes the primary accent color across the entire application interface.
-                  </p>
+                <div className="divider" style={{ margin: 'var(--space-md) 0' }} />
+
+                <h3 style={{ fontSize: 'var(--text-md)', marginBottom: 'var(--space-xs)', color: 'var(--text-primary)' }}>Accent Color</h3>
+                <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
+                  {['#7c5cfc', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899'].map(color => (
+                    <button
+                      key={color}
+                      onClick={() => updatePrefs({ accentColor: color })}
+                      style={{
+                        width: '32px', height: '32px', borderRadius: '50%',
+                        background: color, border: 'none', cursor: 'pointer',
+                        boxShadow: prefs.accentColor === color ? `0 0 0 2px var(--bg-primary), 0 0 0 4px ${color}` : 'none',
+                        transform: prefs.accentColor === color ? 'scale(1.1)' : 'scale(1)',
+                        transition: 'all 0.2s ease'
+                      }}
+                    />
+                  ))}
                 </div>
               </div>
             )}
 
             {/* --- AUDIO ENGINE TAB --- */}
             {activeTab === 'dsp' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-xl)' }}>
-                <div style={{ background: 'rgba(251, 191, 36, 0.1)', borderLeft: '3px solid var(--color-warning)', padding: 'var(--space-sm) var(--space-md)', borderRadius: '4px' }}>
-                  <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>
-                    <strong>Warning:</strong> These settings modify deeply embedded logic inside the Transcription Pipeline. Changing them may result in missed notes or hallucinated noise.
-                  </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+                <h3 style={{ fontSize: 'var(--text-md)', marginBottom: 'var(--space-xs)', color: 'var(--text-primary)' }}>Transcription Engine</h3>
+                
+                <div className="pref-row">
+                  <label>Pitch Detection Algorithm</label>
+                  <select className="select" value={prefs.pitchEngine} onChange={(e) => updatePrefs({ pitchEngine: e.target.value })}>
+                    <option value="basic">Basic (Fastest)</option>
+                    <option value="high-accuracy">High Accuracy (YIN+)</option>
+                    <option value="low-latency">Low Latency (MPM)</option>
+                  </select>
                 </div>
 
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-xs)' }}>
-                    <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)', fontWeight: 500 }}>YIN Pitch Confidence Threshold</label>
-                    <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-accent)' }}>{prefs.advancedDSP.yinThreshold.toFixed(2)}</span>
-                  </div>
-                  <input
-                    type="range"
-                    className="slider"
-                    min="0.05"
-                    max="0.40"
-                    step="0.01"
-                    value={prefs.advancedDSP.yinThreshold}
-                    onChange={(e) => updateDSP({ yinThreshold: parseFloat(e.target.value) })}
-                  />
-                  <p style={{ marginTop: 'var(--space-xs)', fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>
-                    Lower values require the pitch algorithm to be MORE confident. Raise this if the engine is missing notes in noisy audio, lower it if it's picking up unpitched noise like drums as notes. (Default: 0.15)
-                  </p>
+                <div className="pref-row">
+                  <label>MIDI Input Device</label>
+                  <select className="select" value={prefs.midiInput} onChange={(e) => updatePrefs({ midiInput: e.target.value })}>
+                    <option value="None">None</option>
+                    <option value="AKAI MPK Mini">AKAI MPK Mini MK3</option>
+                    <option value="Virtual Port">Virtual MIDI Port</option>
+                  </select>
                 </div>
 
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-xs)' }}>
-                    <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)', fontWeight: 500 }}>Transient Onset Sensitivity</label>
-                    <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-accent)' }}>{prefs.advancedDSP.onsetSensitivity.toFixed(2)}</span>
-                  </div>
-                  <input
-                    type="range"
-                    className="slider"
-                    min="0.0"
-                    max="1.0"
-                    step="0.05"
-                    value={prefs.advancedDSP.onsetSensitivity}
-                    onChange={(e) => updateDSP({ onsetSensitivity: parseFloat(e.target.value) })}
-                  />
-                  <p style={{ marginTop: 'var(--space-xs)', fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>
-                    Controls how aggressively the engine splits continuous audio into separate note blocks based on sudden amplitude/frequency changes. (Default: 0.3)
-                  </p>
-                </div>
+                <div className="divider" style={{ margin: 'var(--space-md) 0' }} />
 
+                <h3 style={{ fontSize: 'var(--text-md)', marginBottom: 'var(--space-xs)', color: 'var(--text-primary)' }}>DSP Sensitivity</h3>
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-xs)' }}>
-                    <label style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)', fontWeight: 500 }}>Pitch Median Filter Window</label>
-                    <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-accent)' }}>{prefs.advancedDSP.medianFilterWindow} frames</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)' }}>
+                    <span>Onset Sensitivity</span>
+                    <span>{prefs.advancedDSP.onsetSensitivity.toFixed(2)}</span>
                   </div>
-                  <input
-                    type="range"
-                    className="slider"
-                    min="1"
-                    max="15"
-                    step="2"
-                    value={prefs.advancedDSP.medianFilterWindow}
-                    onChange={(e) => updateDSP({ medianFilterWindow: parseInt(e.target.value) })}
-                  />
-                  <p style={{ marginTop: 'var(--space-xs)', fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>
-                    The size of the sliding window used to filter out rapid octave jumps. Must be an odd number. Larger sizes smooth out errors better but can smear fast vibrato or rapid trills. (Default: 5)
-                  </p>
+                  <input type="range" min="0" max="1" step="0.05" value={prefs.advancedDSP.onsetSensitivity} onChange={(e) => updateDSP({ onsetSensitivity: parseFloat(e.target.value) })} />
                 </div>
               </div>
             )}
 
             {/* --- NOTATION TAB --- */}
             {activeTab === 'notation' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-xl)' }}>
-                <div>
-                  <h3 style={{ fontSize: 'var(--text-md)', marginBottom: 'var(--space-md)', color: 'var(--text-primary)' }}>Visual Style</h3>
-                  <div style={{ display: 'flex', gap: 'var(--space-md)' }}>
-                    {['standard', 'jazz'].map(style => (
-                      <button
-                        key={style}
-                        onClick={() => updatePrefs({ notationStyle: style })}
-                        style={{
-                          flex: 1, padding: 'var(--space-lg)',
-                          background: prefs.notationStyle === style ? 'var(--bg-tertiary)' : 'var(--bg-secondary)',
-                          border: `2px solid ${prefs.notationStyle === style ? 'var(--accent-primary)' : 'transparent'}`,
-                          borderRadius: 'var(--radius-md)', cursor: 'pointer',
-                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-sm)'
-                        }}
-                      >
-                        <span style={{ fontSize: '24px', fontFamily: style === 'jazz' ? 'cursive' : 'serif', color: 'var(--text-primary)' }}>
-                          &#119070;
-                        </span>
-                        <span style={{ textTransform: 'capitalize', color: 'var(--text-primary)' }}>{style} Check</span>
-                        {style === 'jazz' && <span style={{ fontSize: '10px', color: 'var(--color-warning)' }}>(Mockup)</span>}
-                      </button>
-                    ))}
-                  </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+                <h3 style={{ fontSize: 'var(--text-md)', marginBottom: 'var(--space-xs)', color: 'var(--text-primary)' }}>Visual & Rule-based</h3>
+                
+                <div className="pref-row">
+                  <label>Automatic Beaming</label>
+                  <input type="checkbox" checked={prefs.autoBeam} onChange={(e) => updatePrefs({ autoBeam: e.target.checked })} />
+                </div>
+
+                <div className="pref-row">
+                  <label>Show Measure Numbers</label>
+                  <input type="checkbox" checked={prefs.showMeasureNumbers} onChange={(e) => updatePrefs({ showMeasureNumbers: e.target.checked })} />
+                </div>
+
+                <div className="pref-row">
+                  <label>Note Coloration</label>
+                  <select className="select" value={prefs.noteColoration} onChange={(e) => updatePrefs({ noteColoration: e.target.value })}>
+                    <option value="mono">Monochrome (Classic)</option>
+                    <option value="pitch">Pitch-based (Rainbow)</option>
+                    <option value="velocity">Velocity-based (Intensity)</option>
+                  </select>
+                </div>
+
+                <div className="divider" style={{ margin: 'var(--space-md) 0' }} />
+                
+                <h3 style={{ fontSize: 'var(--text-md)', marginBottom: 'var(--space-xs)', color: 'var(--text-primary)' }}>Score Style</h3>
+                <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
+                  {['standard', 'jazz'].map(style => (
+                    <button
+                      key={style}
+                      className={`btn ${prefs.notationStyle === style ? 'btn-primary' : 'btn-ghost'}`}
+                      style={{ flex: 1, textTransform: 'capitalize' }}
+                      onClick={() => updatePrefs({ notationStyle: style })}
+                    >
+                      {style}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}

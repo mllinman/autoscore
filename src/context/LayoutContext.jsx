@@ -58,6 +58,41 @@ const defaultLayout = {
   dragSource: null,
 };
 
+const layoutPresets = {
+  cakewalk: { ...defaultLayout },
+  producer: {
+    ...defaultLayout,
+    panelVisibility: Object.keys(defaultLayout.panelVisibility).reduce((acc, k) => ({ ...acc, [k]: true }), {}),
+    zones: {
+      ...defaultLayout.zones,
+      bottom: { panels: ['plugins'], collapsed: false }
+    }
+  },
+  minimal: {
+    ...defaultLayout,
+    panelVisibility: { timeline: true },
+    zones: {
+      top: { panels: ['header'], collapsed: false },
+      left: { panels: [], collapsed: true },
+      center: { panels: ['timeline'], collapsed: false },
+      right: { panels: [], collapsed: true },
+      bottom: { panels: [], collapsed: true },
+    }
+  },
+  composer: {
+    ...defaultLayout,
+    panelVisibility: { timeline: true, notations: true, tools: true, properties: true },
+    activeSortedTab: 'sheet',
+    zones: {
+      top: { panels: ['header'], collapsed: false },
+      left: { panels: ['tools', 'properties'], collapsed: false },
+      center: { panels: ['notations'], collapsed: false },
+      right: { panels: [], collapsed: true },
+      bottom: { panels: ['timeline'], collapsed: false },
+    }
+  }
+};
+
 function layoutReducer(state, action) {
   switch (action.type) {
     case 'SET_ZONE_SIZE':
@@ -200,6 +235,9 @@ function layoutReducer(state, action) {
 
     case 'LOAD_LAYOUT':
       return { ...defaultLayout, ...action.payload };
+
+    case 'APPLY_PRESET':
+      return { ...state, ...layoutPresets[action.payload] };
 
     default:
       return state;

@@ -26,6 +26,18 @@ const initialState = {
     accentColor: '#7c5cfc',
     notationStyle: 'standard', // 'standard' | 'jazz'
     autoSave: true,
+    language: 'en',
+    uiScale: 100,
+    panelOpacity: 100,
+    vibrantAccents: true,
+    autoScroll: true,
+    defaultZoom: 100,
+    pitchEngine: 'high-accuracy', // 'basic' | 'high-accuracy' | 'low-latency'
+    sampleRate: 44100,
+    midiInput: 'None',
+    showMeasureNumbers: true,
+    noteColoration: 'pitch', // 'pitch' | 'velocity' | 'mono'
+    autoBeam: true,
     advancedDSP: {
       yinThreshold: 0.15,
       onsetSensitivity: 0.3,
@@ -403,6 +415,12 @@ function appReducer(state, action) {
 
     case 'SET_SCORE_TITLE':
       return { ...state, scoreTitle: action.payload };
+
+    case 'RESET_PROJECT':
+      return {
+        ...initialState,
+        preferences: state.preferences // Keep preferences on project reset
+      };
 
     case 'SET_SCORE_TRANSPOSE':
       return { ...state, scoreTranspose: action.payload };

@@ -1337,6 +1337,7 @@ body {
   position: fixed;
   inset: 0;
   background: rgba(10, 10, 15, 0.85);
+  -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   display: flex;
   flex-direction: column;
@@ -1390,6 +1391,7 @@ body {
   position: fixed;
   inset: 0;
   background: rgba(10, 10, 15, 0.8);
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
@@ -1851,6 +1853,51 @@ body {
 .dropdown-item:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Professional Menu System */
+.pro-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 200px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xl);
+  z-index: 1000;
+  padding: var(--space-xs);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.dropdown-submenu {
+  position: relative;
+}
+
+.submenu-content {
+  position: absolute;
+  left: 100%;
+  top: -4px;
+  min-width: 180px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xl);
+  padding: var(--space-xs);
+  display: none;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.dropdown-submenu:hover > .submenu-content {
+  display: block;
+}
+
+.divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 4px 6px;
 }
 
 /* Measure Editor */
